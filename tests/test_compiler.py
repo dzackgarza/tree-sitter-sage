@@ -10,10 +10,7 @@ from sagepython import LoweredSource, lower
 
 
 def _segment_tuples(result: LoweredSource) -> list[tuple[str, int, int, bool]]:
-    return [
-        (segment.text, segment.original_start, segment.original_end, segment.exact)
-        for segment in result.source_map.segments
-    ]
+    return [(segment.text, segment.original_start, segment.original_end, segment.exact) for segment in result.source_map.segments]
 
 
 def _assert_equivalent(source: str, previous: LoweredSource) -> LoweredSource:
@@ -49,9 +46,7 @@ def test_editing_inside_an_existing_construct() -> None:
 
 def test_multiline_insertion_between_constructs() -> None:
     state = lower("a = 1\nz = {n^2 | n in [1..5]}\n")
-    _assert_equivalent(
-        "a = 1\nf(t) = t^3 - t\nw = 5r\nz = {n^2 | n in [1..5]}\n", state
-    )
+    _assert_equivalent("a = 1\nf(t) = t^3 - t\nw = 5r\nz = {n^2 | n in [1..5]}\n", state)
 
 
 def test_error_to_valid_transition() -> None:
@@ -80,9 +75,7 @@ def test_incremental_source_map_translates_like_a_fresh_one() -> None:
     fresh = lower(edited)
 
     generated_column = fresh.python.split("\n")[1].find("zz")
-    assert incremental.source_map.original_position(
-        2, generated_column
-    ) == fresh.source_map.original_position(2, generated_column)
+    assert incremental.source_map.original_position(2, generated_column) == fresh.source_map.original_position(2, generated_column)
     assert incremental.source_map.original_position(2, generated_column) == (2, 10)
 
 

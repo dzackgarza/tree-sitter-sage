@@ -17,21 +17,13 @@ def test_extension_lowers_set_literals() -> None:
 
 
 def test_extension_lowers_builders() -> None:
-    assert _research("s = {x^2 | x in D}\n") == (
-        "s = ImageSet(lambda x: x**Integer(2), D)\n"
-    )
-    assert _research("s = {x in D | P(x)}\n") == (
-        "s = ConditionSet(D, lambda x: P(x))\n"
-    )
-    assert _research("s = {x | x in D and P(x) and Q(x)}\n") == (
-        "s = ConditionSet(D, lambda x: P(x) and Q(x))\n"
-    )
+    assert _research("s = {x^2 | x in D}\n") == ("s = ImageSet(lambda x: x**Integer(2), D)\n")
+    assert _research("s = {x in D | P(x)}\n") == ("s = ConditionSet(D, lambda x: P(x))\n")
+    assert _research("s = {x | x in D and P(x) and Q(x)}\n") == ("s = ConditionSet(D, lambda x: P(x) and Q(x))\n")
 
 
 def test_extension_lowers_brace_ellipsis() -> None:
-    assert _research("t = {1..3}\n") == (
-        "t = Set((ellipsis_range(Integer(1),Ellipsis,Integer(3))))\n"
-    )
+    assert _research("t = {1..3}\n") == ("t = Set((ellipsis_range(Integer(1),Ellipsis,Integer(3))))\n")
 
 
 def test_extension_keeps_dictionaries() -> None:
@@ -54,12 +46,7 @@ def test_multiline_set_with_interior_comments_lowers_compilably() -> None:
     # once swallowed the rest of the line (found by the research repo's
     # route-audit suite).
     result = lower(
-        "exempt = {\n"
-        "    # the first entry\n"
-        '    "a",\n'
-        "    # a trailing note\n"
-        '    "b", "c",\n'
-        "}\n",
+        'exempt = {\n    # the first entry\n    "a",\n    # a trailing note\n    "b", "c",\n}\n',
         extensions=(EXTENSION,),
     )
     compile(result.python, "<cell>", "exec")

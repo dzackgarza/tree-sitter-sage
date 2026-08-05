@@ -14,17 +14,17 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from typing import Literal
-
-# Number-literal handling: "wrapped" emits Integer()/RealNumber() calls,
-# "raw" leaves numeric literals as CPython sees them.
-Numbers = Literal["wrapped", "raw"]
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
+from typing import Literal
 
 import tree_sitter_sage
 
 from tree_sitter import Language, Node, Parser, Tree
+
+# Number-literal handling: "wrapped" emits Integer()/RealNumber() calls,
+# "raw" leaves numeric literals as CPython sees them.
+Numbers = Literal["wrapped", "raw"]
 
 _LANGUAGE = Language(tree_sitter_sage.language())
 _PARSER = Parser(_LANGUAGE)
@@ -434,11 +434,7 @@ def _has_ellipsis(elements: list[Node]) -> bool:
 def _named_elements(node: Node) -> list[Node]:
     # Comments are named extras; splicing them into a joined single-line
     # rewrite would comment out everything after them.
-    return [
-        child
-        for child in node.children
-        if child.is_named and child.type != "comment"
-    ]
+    return [child for child in node.children if child.is_named and child.type != "comment"]
 
 
 def _lower_list(node: Node, context: _Context) -> str | None:
