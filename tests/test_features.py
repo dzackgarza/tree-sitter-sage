@@ -8,7 +8,6 @@ the new lowering contract.
 
 from sagepython import lower
 
-
 # ---------------------------------------------------------------------------
 # Protections: base surface the features must not disturb
 # ---------------------------------------------------------------------------
@@ -17,10 +16,7 @@ from sagepython import lower
 def test_not_equal_never_becomes_factorial() -> None:
     assert lower("a = 5!=3\n").python == "a = Integer(5)!=Integer(3)\n"
     assert lower("b = 5 != 3\n").python == "b = Integer(5) != Integer(3)\n"
-    assert (
-        lower("c = [n for n in d if n != 0]\n").python
-        == "c = [n for n in d if n != Integer(0)]\n"
-    )
+    assert lower("c = [n for n in d if n != 0]\n").python == "c = [n for n in d if n != Integer(0)]\n"
 
 
 def test_fstring_conversions_are_not_factorials() -> None:
@@ -35,10 +31,7 @@ def test_plain_lists_dicts_and_statement_semicolons_survive() -> None:
 
 
 def test_ellipsis_lists_survive() -> None:
-    assert (
-        lower("r = [1..5]\n").python
-        == "r = (ellipsis_range(Integer(1),Ellipsis,Integer(5)))\n"
-    )
+    assert lower("r = [1..5]\n").python == "r = (ellipsis_range(Integer(1),Ellipsis,Integer(5)))\n"
 
 
 def test_floats_and_generator_access_survive() -> None:
@@ -46,6 +39,18 @@ def test_floats_and_generator_access_survive() -> None:
     assert lower("t = 2.5.sqrt()\n").python == "t = RealNumber('2.5').sqrt()\n"
     assert lower("g = R.0\n").python == "g = R.gen(0)\n"
     assert lower("h = R.0 + R.1\n").python == "h = R.gen(0) + R.gen(1)\n"
+
+
+def test_string_prefixes_are_not_implicit_factors() -> None:
+    # numpy's crackfortran.py: adjacent prefixed strings after a binary
+    # operand must stay implicit concatenation, not a juxtaposed
+    # product against the prefix letter.  The wrapped integer proves the
+    # statement parsed (an error region would splice verbatim).
+    result = lower("v = [1, y + r'aa' r'bb']\n")
+    assert result.python == "v = [Integer(1), y + r'aa' r'bb']\n"
+    continued = lower("x = y + \\\n    r'aa'\\\n    r'bb'\nn = 5\n")
+    assert continued.python.endswith("n = Integer(5)\n")
+    compile(continued.python, "<cell>", "exec")
 
 
 # ---------------------------------------------------------------------------
@@ -60,10 +65,7 @@ def test_factorial_on_literals_and_names() -> None:
 
 
 def test_factorial_composes_with_operators() -> None:
-    assert (
-        lower("a = 5! + 3!\n").python
-        == "a = factorial(Integer(5)) + factorial(Integer(3))\n"
-    )
+    assert lower("a = 5! + 3!\n").python == "a = factorial(Integer(5)) + factorial(Integer(3))\n"
     assert lower("b = 5!!\n").python == "b = factorial(factorial(Integer(5)))\n"
     assert lower("c = 5! < 10\n").python == "c = factorial(Integer(5)) < Integer(10)\n"
 
@@ -80,18 +82,12 @@ def test_factorial_requires_adjacency() -> None:
 
 
 def test_matrix_literal_two_by_two() -> None:
-    assert (
-        lower("m = [1,2; 3,4]\n").python
-        == "m = matrix([[Integer(1), Integer(2)], [Integer(3), Integer(4)]])\n"
-    )
+    assert lower("m = [1,2; 3,4]\n").python == "m = matrix([[Integer(1), Integer(2)], [Integer(3), Integer(4)]])\n"
 
 
 def test_matrix_literal_column_and_expressions() -> None:
     assert lower("v = [1; 2]\n").python == "v = matrix([[Integer(1)], [Integer(2)]])\n"
-    assert (
-        lower("m = [x + 1, 0; 0, x^2]\n").python
-        == "m = matrix([[x + Integer(1), Integer(0)], [Integer(0), x**Integer(2)]])\n"
-    )
+    assert lower("m = [x + 1, 0; 0, x^2]\n").python == "m = matrix([[x + Integer(1), Integer(0)], [Integer(0), x**Integer(2)]])\n"
 
 
 # ---------------------------------------------------------------------------

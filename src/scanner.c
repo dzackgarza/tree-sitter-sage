@@ -341,6 +341,49 @@ bool tree_sitter_sage_external_scanner_scan(void *payload, TSLexer *lexer, const
                 }
             }
         }
+        if (length <= 2 && (lexer->lookahead == '\'' || lexer->lookahead == '"')) {
+            // A string prefix, not a factor: `y + r'a' r'b'` must stay
+            // implicit string concatenation.  Returning false would
+            // starve STRING_START (external, and only scanned once per
+            // position), so emit it here with the flags read from the
+            // already-consumed prefix, mirroring the block below.
+            bool is_string_prefix = true;
+            Delimiter delimiter = new_delimiter();
+            for (size_t i = 0; i < length; i++) {
+                char c = (char)(word[i] | 32);
+                if (c == 'r') {
+                    set_raw(&delimiter);
+                } else if (c == 'b') {
+                    set_bytes(&delimiter);
+                } else if (c == 'f' || c == 't') {
+                    set_format(&delimiter);
+                } else if (c != 'u') {
+                    is_string_prefix = false;
+                    break;
+                }
+            }
+            if (is_string_prefix) {
+                if (!valid_symbols[STRING_START]) {
+                    return false;
+                }
+                int32_t quote = lexer->lookahead;
+                set_end_character(&delimiter, (char)quote);
+                advance(lexer);
+                lexer->mark_end(lexer);
+                if (lexer->lookahead == quote) {
+                    advance(lexer);
+                    if (lexer->lookahead == quote) {
+                        advance(lexer);
+                        lexer->mark_end(lexer);
+                        set_triple(&delimiter);
+                    }
+                }
+                array_push(&scanner->delimiters, delimiter);
+                lexer->result_symbol = STRING_START;
+                scanner->inside_interpolated_string = is_format(&delimiter);
+                return true;
+            }
+        }
         lexer->result_symbol = SAGE_JUXTAPOSITION;
         return true;
     }
