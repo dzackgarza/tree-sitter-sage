@@ -7,7 +7,8 @@
       "scope": "source.sage",
       "path": ".",
       "file-types": [
-        "sage"
+        "sage",
+        "py"
       ],
       "highlights": "queries/highlights.scm",
       "tags": "queries/tags.scm",
@@ -15,7 +16,7 @@
     }
   ],
   "metadata": {
-    "version": "0.4.0",
+    "version": "0.4.1",
     "license": "MIT",
     "description": "Sage (SageMath) grammar for tree-sitter, a dialect fork of tree-sitter-sage",
     "authors": [

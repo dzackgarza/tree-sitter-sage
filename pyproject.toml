@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tree-sitter-sage"
 description = "Python grammar for tree-sitter"
-version = "0.4.0"
+version = "0.4.1"
 keywords = ["incremental", "parsing", "tree-sitter", "python"]
 classifiers = [
   "Intended Audience :: Developers",
@@ -17,7 +17,8 @@ authors = [
   { name = "Max Brunsfeld", email = "maxbrunsfeld@gmail.com" },
   { name = "Amaan Qureshi", email = "amaanq12@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
+dependencies = ["tree-sitter"]
 license.text = "MIT"
 readme = "README.md"
 

@@ -1,22 +1,40 @@
-# Gates invoked by the machine-wide ai-review-ci git hooks:
-# pre-commit runs `just test-commit`, pre-push runs `just test-push`.
+# ai-review-ci Python QC delegation justfile.
+# The central implementation lives in ~/ai-review-ci/justfiles/python.just.
+# Public recipes delegate to that central justfile while preserving this repo as the caller root.
 
+# ai-review-ci contract variables consumed by doctor and workflow installers.
+ai_review_ci_schema_version := "1"
+ai_review_ci_profile := "python"
+ai_review_ci_ref := "main"
+ai_review_ci_release_channel := "main"
+ai_review_ci_workflow_template_version := "1"
+ai_review_ci_local_delegation := "global-justfile"
+ai_review_ci_default_branch := "master"
+
+# List available recipes.
 default:
-	@just test-commit
+    @just --list
 
-# Corpus and compiler proofs against the committed parser.
+# Commit-tier QC: the grammar's corpus/highlight suites, then central Python QC.
 test-commit:
-	tree-sitter test
-	sage -python -m pytest -q tests
+    tree-sitter test
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
-# A push refreshes every local installation consuming this grammar.
-test-push: test-commit refresh-local
+# Push-tier QC, then refresh every local installation consuming this grammar.
+test-push:
+    tree-sitter test
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
+    @just refresh-local
+
+# Run CI acceptance QC through the central implementation.
+test-ci:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 
 # The three live consumers hold copies, not links: the Sage venv and
 # the sage-lsp-server venv carry site-packages installs, and the
 # JupyterLab overlay (served develop-mode from the research tree)
 # fetches the committed wasm by name.
 refresh-local:
-	sage -pip install --quiet --force-reinstall --no-deps .
-	uv pip install -p ~/gitclones/sage-lsp-server/.venv --quiet --force-reinstall --no-deps .
-	cp tree-sitter-sage.wasm ~/research/jupyterlab-sage-syntax/static/static/tree-sitter-sage.wasm
+    sage -pip install --quiet --force-reinstall --no-deps .
+    uv pip install -p ~/gitclones/sage-lsp-server/.venv --quiet --force-reinstall --no-deps .
+    cp tree-sitter-sage.wasm ~/research/jupyterlab-sage-syntax/static/static/tree-sitter-sage.wasm
