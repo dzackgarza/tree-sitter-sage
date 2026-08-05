@@ -6477,18 +6477,6 @@
                   "type": "PATTERN",
                   "value": "_?[A-Fa-f0-9]+"
                 }
-              },
-              {
-                "type": "CHOICE",
-                "members": [
-                  {
-                    "type": "PATTERN",
-                    "value": "[Ll]"
-                  },
-                  {
-                    "type": "BLANK"
-                  }
-                ]
               }
             ]
           },
@@ -6514,18 +6502,6 @@
                   "type": "PATTERN",
                   "value": "_?[0-7]+"
                 }
-              },
-              {
-                "type": "CHOICE",
-                "members": [
-                  {
-                    "type": "PATTERN",
-                    "value": "[Ll]"
-                  },
-                  {
-                    "type": "BLANK"
-                  }
-                ]
               }
             ]
           },
@@ -6551,18 +6527,6 @@
                   "type": "PATTERN",
                   "value": "_?[0-1]+"
                 }
-              },
-              {
-                "type": "CHOICE",
-                "members": [
-                  {
-                    "type": "PATTERN",
-                    "value": "[Ll]"
-                  },
-                  {
-                    "type": "BLANK"
-                  }
-                ]
               }
             ]
           },
@@ -6580,28 +6544,11 @@
                 "type": "CHOICE",
                 "members": [
                   {
-                    "type": "CHOICE",
-                    "members": [
-                      {
-                        "type": "PATTERN",
-                        "value": "[Ll]"
-                      },
-                      {
-                        "type": "BLANK"
-                      }
-                    ]
+                    "type": "PATTERN",
+                    "value": "[jJ]"
                   },
                   {
-                    "type": "CHOICE",
-                    "members": [
-                      {
-                        "type": "PATTERN",
-                        "value": "[jJ]"
-                      },
-                      {
-                        "type": "BLANK"
-                      }
-                    ]
+                    "type": "BLANK"
                   }
                 ]
               }

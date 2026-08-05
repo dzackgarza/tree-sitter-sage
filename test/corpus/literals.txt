@@ -33,7 +33,9 @@ Integers
   (integer)
   (integer)
   (integer)
-  (integer))
+  (sage_implicit_product
+    (integer)
+    (identifier)))
 
 ================================================================================
 Floats

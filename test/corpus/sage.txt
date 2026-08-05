@@ -359,18 +359,14 @@ k = xs[1:3]
         (integer)))))
 
 ================================================================================
-Sage: python imaginary and long suffixes are untouched
+Sage: python imaginary suffixes are untouched
 ================================================================================
 
 a = 5j
-b = 5L
 
 --------------------------------------------------------------------------------
 
 (module
-  (assignment
-    (identifier)
-    (integer))
   (assignment
     (identifier)
     (integer)))

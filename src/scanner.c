@@ -363,7 +363,33 @@ bool tree_sitter_sage_external_scanner_scan(void *payload, TSLexer *lexer, const
             if (!has_digits && !('0' <= lexer->lookahead && lexer->lookahead <= '9')) {
                 return false; // a lone '.' operator
             }
-            if (is_id_start(lexer->lookahead) && lexer->lookahead != 'e' && lexer->lookahead != 'E' &&
+            if (lexer->lookahead == 'e' || lexer->lookahead == 'E') {
+                // `1.e5` is a float; `1.exp()` is attribute access on an
+                // integer literal.  Only a digit sign distinguishes them.
+                advance(lexer);
+                if (lexer->lookahead == '+' || lexer->lookahead == '-') {
+                    advance(lexer);
+                }
+                if (!('0' <= lexer->lookahead && lexer->lookahead <= '9')) {
+                    return false;
+                }
+                while (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '_') {
+                    advance(lexer);
+                }
+                lexer->mark_end(lexer);
+                if (lexer->lookahead == 'j' || lexer->lookahead == 'J') {
+                    advance(lexer);
+                    if (lexer->lookahead == 'r' || lexer->lookahead == 'R' ||
+                        is_id_continue(lexer->lookahead)) {
+                        lexer->result_symbol = FLOAT;
+                        return true;
+                    }
+                    lexer->mark_end(lexer);
+                }
+                lexer->result_symbol = FLOAT;
+                return true;
+            }
+            if (is_id_start(lexer->lookahead) &&
                 lexer->lookahead != 'j' && lexer->lookahead != 'J') {
                 // Sage attribute access on an integer literal: `1.sqrt()`.
                 return false;
