@@ -63,5 +63,11 @@ jobs:
             !examples/cpython/Lib/test/test_annotationlib.py
             !examples/cpython/Lib/test/test_compile.py
             !examples/cpython/Lib/test/test_type_params.py
+            # cpython main newer than the grammar: PEP 810 lazy imports
+            # (stdlib + test corpus) and unary-plus case patterns.
+            !examples/cpython/Lib/concurrent/futures/__init__.py
+            !examples/cpython/Lib/test/test_lazy_import/**
+            !examples/cpython/Lib/test/test_patma.py
+            !examples/cpython/Lib/xml/utils.py
           invalid-files: |
             examples/cpython/Lib/test/tokenizedata/badsyntax_3131.py
