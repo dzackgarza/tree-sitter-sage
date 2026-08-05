@@ -19,7 +19,7 @@ default:
 # then the grammar's corpus/highlight suites, then central Python QC.
 test-commit:
     tree-sitter generate
-    git diff --quiet -- src tree-sitter.json || { echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; }
+    if ! git diff --quiet -- src tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
