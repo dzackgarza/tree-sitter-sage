@@ -36,7 +36,39 @@ const PREC = {
 
 const SEMICOLON = ';';
 
-module.exports = grammar({
+const implicitMultiplication = require('./features/implicit_multiplication');
+
+// Grammar feature modules: each is developed and corpus-tested in
+// isolation and composed into the build here.  `SAGE_FEATURES` selects
+// the set at generate time: unset or 'all' builds everything (the
+// shipped grammar); 'core' builds only Sage's default preparser
+// surface; a comma-separated list picks features by name.
+const FEATURE_MODULES = [implicitMultiplication];
+
+function enabledFeatures() {
+  const setting = process.env.SAGE_FEATURES ?? 'all';
+  if (setting === 'all') {
+    return FEATURE_MODULES;
+  }
+  if (setting === 'core') {
+    return [];
+  }
+  const names = new Set(setting.split(','));
+  return FEATURE_MODULES.filter((feature) => names.has(feature.name));
+}
+
+function composed(definition) {
+  for (const feature of enabledFeatures()) {
+    Object.assign(definition.rules, feature.rules);
+    for (const [name, addition] of Object.entries(feature.extend ?? {})) {
+      const base = definition.rules[name];
+      definition.rules[name] = ($) => choice(addition($), base($));
+    }
+  }
+  return definition;
+}
+
+module.exports = grammar(composed({
   name: 'sage',
 
   extras: $ => [
@@ -740,7 +772,6 @@ module.exports = grammar({
       $.sage_generator_access,
       $.sage_raw_literal,
       $.sage_empty_subscript,
-      $.sage_implicit_product,
       $.binary_operator,
       $.identifier,
       $.keyword_identifier,
@@ -833,59 +864,6 @@ module.exports = grammar({
 
     sage_ellipsis: _ => '..',
 
-    // Implicit multiplication (Sage preparser level 5): `2x`, `a b c`,
-    // `(2y^2-4y+3)y`, `2sin(x)`, `f(a)b`.  The left operand mirrors
-    // Sage's rule table: numbers, names, parenthesis-closed
-    // expressions, attributes, and generator accesses.  The right
-    // operand is name-headed, so `f(x)` stays a call and string
-    // juxtaposition stays concatenation.  Grammar keywords exclude
-    // themselves.  Multiplication never crosses a line; the grammar
-    // cannot see whitespace, so the compiler enforces that with node
-    // positions.
-    sage_implicit_product: $ => prec.left(PREC.times, prec.dynamic(-1, seq(
-      // Every primary_expression alternative except keyword_identifier
-      // (`await x`, `match p:` keep their expression/statement readings)
-      // and the string nodes (juxtaposed strings stay concatenation).
-      // Keep in sync with primary_expression when merging upstream.
-      // Known shape caveat: `2^n x0` groups as 2^(n x0) in the tree; the
-      // compiler's textual lowering (insert `*`, rewrite `^` to `**`)
-      // still yields (2**n)*x0 under CPython's precedence.
-      field('left', choice(
-        $.await,
-        $.binary_operator,
-        $.identifier,
-        $.integer,
-        $.float,
-        $.true,
-        $.false,
-        $.none,
-        $.unary_operator,
-        $.attribute,
-        $.subscript,
-        $.call,
-        $.list,
-        $.list_comprehension,
-        $.dictionary,
-        $.dictionary_comprehension,
-        $.set,
-        $.set_comprehension,
-        $.tuple,
-        $.parenthesized_expression,
-        $.generator_expression,
-        $.ellipsis,
-        $.sage_generator_access,
-        $.sage_raw_literal,
-        $.sage_empty_subscript,
-        $.sage_implicit_product,
-      )),
-      $._sage_juxtaposition,
-      field('right', choice(
-        $.identifier,
-        $.call,
-        $.attribute,
-        $.subscript,
-      )),
-    ))),
 
     // Empty-bracket constructor: `QQ[]`; only meaningful as the right
     // side of a generator assignment, where lowering fills the names.
@@ -1323,7 +1301,7 @@ module.exports = grammar({
     positional_separator: _ => '/',
     keyword_separator: _ => '*',
   },
-});
+}));
 
 module.exports.PREC = PREC;
 

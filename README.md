@@ -22,3 +22,29 @@ that delta and nothing else:
 Ordinary Python syntax is inherited from upstream and kept unpatched: general
 Python fixes belong in tree-sitter-python and arrive here by merging upstream.
 The full upstream corpus passes unchanged.
+
+## Feature modules
+
+The grammar is composed at build time from a base definition (Sage's
+default preparser surface: generator assignments, symbolic functions,
+`R.0`, ellipsis ranges, raw literals, `^`/`^^`, literal method calls)
+plus feature modules under `features/`, each a self-contained set of
+rules and choice-rule extensions.  Implicit multiplication — optional
+in Sage itself — is the first such module.
+
+Develop a feature in isolation:
+
+    SAGE_FEATURES=core tree-sitter generate        # base only
+    SAGE_FEATURES=implicit_multiplication tree-sitter generate
+    tree-sitter generate                           # everything (shipped)
+
+Each feature keeps its corpus tests in
+`test/corpus/<feature>.txt`; when testing a reduced build, exclude the
+absent features' tests with `tree-sitter test -e '<feature name>'`.
+The shipped artifacts (`src/`, bindings, WASM) are always the full
+composition.
+
+Lowering in `sagepython` is node-driven, so compiler behavior follows
+whatever the built grammar recognizes; semantics-only dialect notation
+(no new syntax) skips the grammar entirely and ships as compiler
+extension rule tables like `sagepython.research`.
