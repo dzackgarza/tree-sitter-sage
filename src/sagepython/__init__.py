@@ -432,7 +432,13 @@ def _has_ellipsis(elements: list[Node]) -> bool:
 
 
 def _named_elements(node: Node) -> list[Node]:
-    return [child for child in node.children if child.is_named]
+    # Comments are named extras; splicing them into a joined single-line
+    # rewrite would comment out everything after them.
+    return [
+        child
+        for child in node.children
+        if child.is_named and child.type != "comment"
+    ]
 
 
 def _lower_list(node: Node, context: _Context) -> str | None:

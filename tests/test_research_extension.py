@@ -47,3 +47,20 @@ def test_incremental_reuse_is_equivalent_under_extensions() -> None:
     edited = "s = {x | x in D and P(x)}\n"
     incremental = lower(edited, previous=state, extensions=(EXTENSION,))
     assert incremental.python == lower(edited, extensions=(EXTENSION,)).python
+
+
+def test_multiline_set_with_interior_comments_lowers_compilably() -> None:
+    # A comment node spliced into the single-line Set([...]) rewrite
+    # once swallowed the rest of the line (found by the research repo's
+    # route-audit suite).
+    result = lower(
+        "exempt = {\n"
+        "    # the first entry\n"
+        '    "a",\n'
+        "    # a trailing note\n"
+        '    "b", "c",\n'
+        "}\n",
+        extensions=(EXTENSION,),
+    )
+    compile(result.python, "<cell>", "exec")
+    assert "#" not in result.python.splitlines()[0][result.python.find("Set") :]
