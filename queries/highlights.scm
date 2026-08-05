@@ -135,3 +135,28 @@
   "match"
   "case"
 ] @keyword
+
+; Sage dialect
+
+(sage_generator_assignment
+  name: (identifier) @variable)
+
+(sage_generator_assignment
+  generator: (identifier) @variable)
+
+(sage_symbolic_function_assignment
+  name: (identifier) @function)
+
+(sage_symbolic_function_assignment
+  parameter: (identifier) @variable.parameter)
+
+(sage_generator_index) @number
+
+(sage_raw_literal) @number
+
+(sage_ellipsis) @operator
+
+(sage_ellipsis_span
+  ".." @operator)
+
+".<" @punctuation.bracket
