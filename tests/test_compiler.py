@@ -65,9 +65,9 @@ def test_deleting_a_leading_construct() -> None:
 
 
 def test_wrap_mode_mismatch_falls_back_to_a_fresh_parse() -> None:
-    state = lower("q = 2^3\n", wrap_numbers=False)
+    state = lower("q = 2^3\n", numbers="raw")
 
-    result = lower("q = 2^3 + 1\n", wrap_numbers=True, previous=state)
+    result = lower("q = 2^3 + 1\n", numbers="wrapped", previous=state)
 
     assert result.python == lower("q = 2^3 + 1\n").python
 

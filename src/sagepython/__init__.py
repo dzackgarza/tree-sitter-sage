@@ -1,7 +1,7 @@
 r"""The SagePython compiler: tree-sitter-sage recognition and lowering.
 
 Sage-free by construction — importable in any Python environment.
-``lower(source, wrap_numbers=True, previous=None, extensions=())``
+``lower(source, numbers="wrapped", previous=None, extensions=())``
 returns :class:`LoweredSource` (ordinary Python plus a
 :class:`SourceMap` translating positions in both directions), with
 incremental parse reuse via ``previous``.  The core lowers exactly the
@@ -14,6 +14,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
+from typing import Literal
+
+# Number-literal handling: "wrapped" emits Integer()/RealNumber() calls,
+# "raw" leaves numeric literals as CPython sees them.
+Numbers = Literal["wrapped", "raw"]
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 
@@ -32,7 +37,7 @@ _RAW_SUFFIX = re.compile(r"[rRlLjJ]+$")
 class _Context:
     source: bytes
     rules: Mapping[str, LoweringRule]
-    wrap_numbers: bool = True
+    numbers: Numbers = "wrapped"
     in_case_pattern: bool = False
 
     def text(self, node: Node) -> str:
@@ -219,7 +224,7 @@ class LoweredSource:
     python: str
     source_map: SourceMap
     _tree: Tree | None = dataclass_field(default=None, repr=False, compare=False)
-    _wrap_numbers: bool = dataclass_field(default=True, repr=False, compare=False)
+    _numbers: Numbers = dataclass_field(default="wrapped", repr=False, compare=False)
 
 
 def _lower(node: Node, context: _Context) -> str:
@@ -262,7 +267,7 @@ def _integer_stem(text: str) -> str:
 
 def _lower_integer(node: Node, context: _Context) -> str | None:
     text = context.text(node)
-    if not context.wrap_numbers or context.in_case_pattern:
+    if context.numbers == "raw" or context.in_case_pattern:
         return None
     if text[-1] in "jJ":
         return f"ComplexNumber(0, '{text[:-1]}')"
@@ -276,7 +281,7 @@ def _lower_integer(node: Node, context: _Context) -> str | None:
 
 def _lower_float(node: Node, context: _Context) -> str | None:
     text = context.text(node)
-    if not context.wrap_numbers or context.in_case_pattern:
+    if context.numbers == "raw" or context.in_case_pattern:
         return None
     if text[-1] in "jJ":
         return f"ComplexNumber(0, '{text[:-1]}')"
@@ -483,7 +488,7 @@ def _byte_point(encoded: bytes, offset: int) -> tuple[int, int]:
 
 def lower(
     source: str,
-    wrap_numbers: bool = True,
+    numbers: Numbers = "wrapped",
     previous: LoweredSource | None = None,
     extensions: Sequence[Mapping[str, LoweringRule]] = (),
 ) -> LoweredSource:
@@ -500,7 +505,7 @@ def lower(
     for extension in extensions:
         rules.update(extension)
     old_tree = None
-    if previous is not None and previous._tree is not None and previous._wrap_numbers == wrap_numbers:
+    if previous is not None and previous._tree is not None and previous._numbers == numbers:
         old = previous.source_map.original.encode("utf-8")
         prefix = 0
         limit = min(len(old), len(encoded))
@@ -524,14 +529,14 @@ def lower(
         tree = _PARSER.parse(encoded, old_tree)
     else:
         tree = _PARSER.parse(encoded)
-    context = _Context(source=encoded, rules=rules, wrap_numbers=wrap_numbers)
+    context = _Context(source=encoded, rules=rules, numbers=numbers)
     segments = tuple(_segments(tree.root_node, context))
     python = "".join(segment.text for segment in segments)
     return LoweredSource(
         python=python,
         source_map=SourceMap(original=source, python=python, segments=segments),
         _tree=tree,
-        _wrap_numbers=wrap_numbers,
+        _numbers=numbers,
     )
 
 

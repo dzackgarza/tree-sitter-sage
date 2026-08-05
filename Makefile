@@ -1,6 +1,6 @@
 LANGUAGE_NAME := tree-sitter-sage
 HOMEPAGE_URL := https://github.com/tree-sitter/tree-sitter-sage
-VERSION := 0.4.2
+VERSION := 0.4.3
 
 # repository
 SRC_DIR := src
