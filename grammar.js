@@ -94,6 +94,12 @@ module.exports = grammar({
     // Sage: float lexing needs lookahead (`1..5`, `1.sqrt()`, `2.5r`),
     // so the float token lives in the external scanner.
     $.float,
+
+    // Sage: implicit multiplication must not cross a line, but the
+    // grammar cannot see whitespace.  The scanner emits this
+    // zero-width token between juxtaposed operands only when no
+    // newline separates them and a name character follows.
+    $._sage_juxtaposition,
   ],
 
   inline: $ => [
@@ -734,6 +740,7 @@ module.exports = grammar({
       $.sage_generator_access,
       $.sage_raw_literal,
       $.sage_empty_subscript,
+      $.sage_implicit_product,
       $.binary_operator,
       $.identifier,
       $.keyword_identifier,
@@ -825,6 +832,60 @@ module.exports = grammar({
     )),
 
     sage_ellipsis: _ => '..',
+
+    // Implicit multiplication (Sage preparser level 5): `2x`, `a b c`,
+    // `(2y^2-4y+3)y`, `2sin(x)`, `f(a)b`.  The left operand mirrors
+    // Sage's rule table: numbers, names, parenthesis-closed
+    // expressions, attributes, and generator accesses.  The right
+    // operand is name-headed, so `f(x)` stays a call and string
+    // juxtaposition stays concatenation.  Grammar keywords exclude
+    // themselves.  Multiplication never crosses a line; the grammar
+    // cannot see whitespace, so the compiler enforces that with node
+    // positions.
+    sage_implicit_product: $ => prec.left(PREC.times, prec.dynamic(-1, seq(
+      // Every primary_expression alternative except keyword_identifier
+      // (`await x`, `match p:` keep their expression/statement readings)
+      // and the string nodes (juxtaposed strings stay concatenation).
+      // Keep in sync with primary_expression when merging upstream.
+      // Known shape caveat: `2^n x0` groups as 2^(n x0) in the tree; the
+      // compiler's textual lowering (insert `*`, rewrite `^` to `**`)
+      // still yields (2**n)*x0 under CPython's precedence.
+      field('left', choice(
+        $.await,
+        $.binary_operator,
+        $.identifier,
+        $.integer,
+        $.float,
+        $.true,
+        $.false,
+        $.none,
+        $.unary_operator,
+        $.attribute,
+        $.subscript,
+        $.call,
+        $.list,
+        $.list_comprehension,
+        $.dictionary,
+        $.dictionary_comprehension,
+        $.set,
+        $.set_comprehension,
+        $.tuple,
+        $.parenthesized_expression,
+        $.generator_expression,
+        $.ellipsis,
+        $.sage_generator_access,
+        $.sage_raw_literal,
+        $.sage_empty_subscript,
+        $.sage_implicit_product,
+      )),
+      $._sage_juxtaposition,
+      field('right', choice(
+        $.identifier,
+        $.call,
+        $.attribute,
+        $.subscript,
+      )),
+    ))),
 
     // Empty-bracket constructor: `QQ[]`; only meaningful as the right
     // side of a generator assignment, where lowering fills the names.

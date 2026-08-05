@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -20,6 +21,7 @@ enum TokenType {
     CLOSE_BRACE,
     EXCEPT,
     FLOAT,
+    SAGE_JUXTAPOSITION,
 };
 
 typedef enum {
@@ -308,6 +310,40 @@ bool tree_sitter_sage_external_scanner_scan(void *payload, TSLexer *lexer, const
         }
     }
 
+
+    if (valid_symbols[SAGE_JUXTAPOSITION] && !error_recovery_mode && !found_end_of_line &&
+        is_id_start(lexer->lookahead)) {
+        // Zero-width marker: implicit multiplication binds only within a
+        // line, immediately before a name-headed operand.  A reserved
+        // keyword can never be a factor, and emitting the marker before
+        // one would starve the branch that must shift the keyword.
+        lexer->mark_end(lexer);
+        char word[10] = {0};
+        size_t length = 0;
+        while (is_id_continue(lexer->lookahead)) {
+            if (length < sizeof(word) - 1 && lexer->lookahead < 128) {
+                word[length] = (char)lexer->lookahead;
+            }
+            length++;
+            advance(lexer);
+        }
+        static const char *const reserved[] = {
+            "and", "as", "assert", "async", "await", "break", "class",
+            "continue", "def", "del", "elif", "else", "except", "finally",
+            "for", "from", "global", "if", "import", "in", "is", "lambda",
+            "nonlocal", "not", "or", "pass", "raise", "return", "try",
+            "while", "with", "yield",
+        };
+        if (length < sizeof(word)) {
+            for (size_t i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++) {
+                if (strcmp(word, reserved[i]) == 0) {
+                    return false;
+                }
+            }
+        }
+        lexer->result_symbol = SAGE_JUXTAPOSITION;
+        return true;
+    }
 
     if (valid_symbols[FLOAT] &&
         (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '.')) {

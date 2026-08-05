@@ -396,3 +396,193 @@ match p:
             (integer)))
         (block
           (pass_statement))))))
+
+================================================================================
+Sage: implicit products
+================================================================================
+
+a = 2x
+b = 3lam
+c = a b c
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (integer)
+      (identifier)))
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (integer)
+      (identifier)))
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (sage_implicit_product
+        (identifier)
+        (identifier))
+      (identifier))))
+
+================================================================================
+Sage: implicit product binds after calls and parens
+================================================================================
+
+d = 2sin(x)
+e2 = (2y^2 - 4y + 3)y
+g = f(a)b
+i = x.y z
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (call
+      (sage_implicit_product
+        (integer)
+        (identifier))
+      (argument_list
+        (identifier))))
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (parenthesized_expression
+        (binary_operator
+          (binary_operator
+            (binary_operator
+              (sage_implicit_product
+                (integer)
+                (identifier))
+              (integer))
+            (sage_implicit_product
+              (integer)
+              (identifier)))
+          (integer)))
+      (identifier)))
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (call
+        (identifier)
+        (argument_list
+          (identifier)))
+      (identifier)))
+  (assignment
+    (identifier)
+    (sage_implicit_product
+      (attribute
+        (identifier)
+        (identifier))
+      (identifier))))
+
+================================================================================
+Sage: implicit product tree shape after a power (known caveat)
+================================================================================
+
+h = 2^n x0
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (binary_operator
+      (integer)
+      (sage_implicit_product
+        (identifier)
+        (identifier)))))
+
+================================================================================
+Sage: no implicit product for await, calls, or strings
+================================================================================
+
+n = await q
+k = f(x)
+m = F(1)(2)
+j = 'a' 'b'
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (await
+      (identifier)))
+  (assignment
+    (identifier)
+    (call
+      (identifier)
+      (argument_list
+        (identifier))))
+  (assignment
+    (identifier)
+    (call
+      (call
+        (identifier)
+        (argument_list
+          (integer)))
+      (argument_list
+        (integer))))
+  (assignment
+    (identifier)
+    (concatenated_string
+      (string
+        (string_start)
+        (string_content)
+        (string_end))
+      (string
+        (string_start)
+        (string_content)
+        (string_end)))))
+
+================================================================================
+Sage: no implicit product across lines
+================================================================================
+
+xs = [m
+  for m in ys]
+p = a if b else c
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (list_comprehension
+      (identifier)
+      (for_in_clause
+        (identifier)
+        (identifier))))
+  (assignment
+    (identifier)
+    (conditional_expression
+      (identifier)
+      (identifier)
+      (identifier))))
+
+================================================================================
+Sage: match subjects are not products
+================================================================================
+
+match command.split():
+    case 1:
+        pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (match_statement
+    (call
+      (attribute
+        (identifier)
+        (identifier))
+      (argument_list))
+    (block
+      (case_clause
+        (case_pattern
+          (integer))
+        (block
+          (pass_statement))))))
