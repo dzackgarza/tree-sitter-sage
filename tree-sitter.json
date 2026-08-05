@@ -6,10 +6,7 @@
       "camelcase": "Sage",
       "scope": "source.sage",
       "path": ".",
-      "file-types": [
-        "sage",
-        "py"
-      ],
+      "file-types": ["sage", "py"],
       "highlights": "queries/highlights.scm",
       "tags": "queries/tags.scm",
       "injection-regex": "sage"
