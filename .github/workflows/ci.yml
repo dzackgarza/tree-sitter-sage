@@ -34,6 +34,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up tree-sitter
         uses: tree-sitter/setup-action/cli@1868a545ffb91bdc221d14a168b5b6d8de4a28b3 # v2
+        with:
+          # Must match the toolchain that generated the committed parser;
+          # the parser-test action regenerates and diffs against src/.
+          tree-sitter-ref: v0.26.9
       - name: Run tests
         uses: tree-sitter/parser-test-action@aba4a3de737f86f8ce83be38166a1ab521d4c960 # v2
         with:
