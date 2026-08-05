@@ -113,25 +113,42 @@ def test_unbalanced_symbolic_assignment_stays_an_error() -> None:
         assert error.lineno == 1
 
 
-def test_generator_ellipsis_lowers_to_the_literal_ellipsis_name() -> None:
-    # research#catalogue: `L.<a1, ..., a8>` keeps the middle slot as the
-    # literal name Ellipsis (exactly as stock Sage emits); the consuming
-    # constructor expands the range at runtime.  The compiler once
-    # silently dropped the slot, emitting a shorter, wrong name list.
+def test_generator_ellipsis_expands_at_compile_time() -> None:
+    # research#catalogue: `L.<a1, ..., a8>` is pure string manipulation,
+    # so the compiler expands it — downstream code sees only real names
+    # and stays focused on the mathematics.  (Stock Sage instead emits a
+    # literal 'Ellipsis' slot for constructors to interpret; the
+    # compiler once even dropped the slot outright.)
     result = lower("L.<a1, ..., a8> = IntegralLattice('E8')\n")
+    names = ", ".join(f"'a{i}'" for i in range(1, 9))
     assert result.python == (
-        "L = IntegralLattice('E8', names=('a1', 'Ellipsis', 'a8',)); "
-        "(a1, Ellipsis, a8,) = L._first_ngens(3)\n"
+        f"L = IntegralLattice('E8', names=({names},)); "
+        "(a1, a2, a3, a4, a5, a6, a7, a8,) = L._first_ngens(8)\n"
     )
 
 
-def test_generator_ellipsis_multiple_spans() -> None:
-    result = lower("M.<v1,v2,e1,...,e8,ep1,...,ep8> = Lattice(22)\n")
+def test_generator_ellipsis_multiple_spans_and_suffixes() -> None:
+    result = lower("M.<v1,v2,e1,...,e4,ep1,...,ep4> = Lattice(10)\n")
     assert (
-        "names=('v1', 'v2', 'e1', 'Ellipsis', 'e8', 'ep1', 'Ellipsis', 'ep8',)"
+        "names=('v1', 'v2', 'e1', 'e2', 'e3', 'e4', 'ep1', 'ep2', 'ep3', 'ep4',)"
         in result.python
     )
-    assert "(v1, v2, e1, Ellipsis, e8, ep1, Ellipsis, ep8,) = M._first_ngens(8)" in result.python
+    assert "= M._first_ngens(10)" in result.python
+
+
+def test_generator_ellipsis_letter_range() -> None:
+    result = lower("L.<a, ..., d> = Lattice(4)\n")
+    assert "names=('a', 'b', 'c', 'd',)" in result.python
+    assert "(a, b, c, d,) = L._first_ngens(4)" in result.python
+
+
+def test_generator_ellipsis_rejects_malformed_spans() -> None:
+    # Mismatched stems cannot expand; failing at preparse beats emitting
+    # a wrong declaration.
+    with pytest.raises(AssertionError):
+        lower("L.<a1, ..., b8> = X(8)\n")
+    with pytest.raises(AssertionError):
+        lower("L.<a8, ..., a1> = X(8)\n")
 
 
 def test_rules_never_fire_over_error_bearing_nodes() -> None:

@@ -352,16 +352,49 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
 # ---------------------------------------------------------------------------
 
 
+_INDEXED_NAME = re.compile(r"([A-Za-z_]+)(\d+)([A-Za-z_]*)")
+
+
+def _expand_generator_ellipsis(slots: "list[str]") -> "list[str]":
+    r"""Expand ``['a1', '...', 'a8']`` through ``'a8'`` at compile time.
+
+    The endpoints determine the range textually — indexed names share a
+    stem (``e1..e8``, ``a1t..a8t``) and single letters step through the
+    alphabet — so no downstream constructor ever sees an ellipsis.
+    Malformed spans fail here, at preparse, never as a wrong declaration.
+    """
+    expanded: list[str] = []
+    for i, slot in enumerate(slots):
+        if slot != "...":
+            expanded.append(slot)
+            continue
+        assert 0 < i < len(slots) - 1, "'...' needs a name on each side"
+        before, after = expanded[-1], slots[i + 1]
+        left = _INDEXED_NAME.fullmatch(before)
+        right = _INDEXED_NAME.fullmatch(after)
+        if left and right:
+            assert left.group(1) == right.group(1) and left.group(3) == right.group(3), (
+                f"'...' between different stems: {before} and {after}"
+            )
+            start, stop = int(left.group(2)), int(right.group(2))
+            assert stop > start, f"'...' range does not ascend: {before}..{after}"
+            stem, suffix = left.group(1), left.group(3)
+            expanded.extend(f"{stem}{k}{suffix}" for k in range(start + 1, stop))
+            continue
+        assert len(before) == 1 and len(after) == 1 and before < after, (
+            f"'...' needs indexed or single-letter endpoints: {before}, {after}"
+        )
+        expanded.extend(chr(c) for c in range(ord(before) + 1, ord(after)))
+    return expanded
+
+
 def _lower_generator_assignment(node: Node, context: _Context) -> str:
     name = node.child_by_field_name("name")
     right = node.child_by_field_name("right")
     assert name is not None and right is not None
-    # `...` becomes the literal name Ellipsis, exactly as stock Sage
-    # emits it; the consuming constructor expands the range at runtime.
-    generators = [
-        "Ellipsis" if context.text(child) == "..." else context.text(child)
-        for child in node.children_by_field_name("generator")
-    ]
+    generators = _expand_generator_ellipsis(
+        [context.text(child) for child in node.children_by_field_name("generator")]
+    )
     others = [context.text(child) for child in node.children_by_field_name("other_target")]
     constructor = _lower_constructor(right, generators, context)
     obj = context.text(name)
