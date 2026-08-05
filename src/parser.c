@@ -223757,7 +223757,7 @@ TS_PUBLIC const TSLanguage *tree_sitter_sage(void) {
     .metadata = {
       .major_version = 0,
       .minor_version = 4,
-      .patch_version = 2,
+      .patch_version = 4,
     },
   };
   return &language;

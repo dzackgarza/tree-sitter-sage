@@ -15,8 +15,11 @@ ai_review_ci_default_branch := "master"
 default:
     @just --list
 
-# Commit-tier QC: the grammar's corpus/highlight suites, then central Python QC.
+# Commit-tier QC: committed parser tables must match a fresh generate,
+# then the grammar's corpus/highlight suites, then central Python QC.
 test-commit:
+    tree-sitter generate
+    git diff --quiet -- src tree-sitter.json || { echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; }
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 
