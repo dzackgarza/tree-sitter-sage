@@ -37,7 +37,7 @@ const PREC = {
 const SEMICOLON = ';';
 
 module.exports = grammar({
-  name: 'python',
+  name: 'sage',
 
   extras: $ => [
     $.comment,
@@ -55,6 +55,7 @@ module.exports = grammar({
     [$.print_statement, $.primary_expression],
     [$.type_alias_statement, $.primary_expression],
     [$.match_statement, $.primary_expression],
+    [$.sage_symbolic_function_assignment, $.primary_expression],
   ],
 
   supertypes: $ => [
@@ -89,6 +90,10 @@ module.exports = grammar({
     ')',
     '}',
     'except',
+
+    // Sage: float lexing needs lookahead (`1..5`, `1.sqrt()`, `2.5r`),
+    // so the float token lives in the external scanner.
+    $.float,
   ],
 
   inline: $ => [
@@ -132,6 +137,8 @@ module.exports = grammar({
     ),
 
     _simple_statement: $ => choice(
+      $.sage_generator_assignment,
+      $.sage_symbolic_function_assignment,
       $.future_import_statement,
       $.import_statement,
       $.import_from_statement,
@@ -724,6 +731,9 @@ module.exports = grammar({
 
     primary_expression: $ => choice(
       $.await,
+      $.sage_generator_access,
+      $.sage_raw_literal,
+      $.sage_empty_subscript,
       $.binary_operator,
       $.identifier,
       $.keyword_identifier,
@@ -769,6 +779,76 @@ module.exports = grammar({
       )),
     ),
 
+
+    // ------------------------------------------------------------------
+    // Sage dialect additions.  Each rule below extends Python with one
+    // construct from Sage's language delta.  Python-valid syntax whose
+    // meaning Sage changes (numeric literals, `^` operands) is
+    // reinterpreted at lowering time, not in the grammar.
+    // ------------------------------------------------------------------
+
+    // Generator-binding assignment: `R.<x, y> = QQ[]`, including extra
+    // assignment targets as in `F.<b>, f, g = S.field_extension()`.
+    sage_generator_assignment: $ => seq(
+      field('name', $.identifier),
+      '.<',
+      commaSep1(field('generator', $.identifier)),
+      '>',
+      optional(seq(',', commaSep1(field('other_target', $.identifier)))),
+      '=',
+      field('right', $._right_hand_side),
+    ),
+
+    // Symbolic function assignment: `f(x, y) = x^2 - y`.
+    sage_symbolic_function_assignment: $ => seq(
+      field('name', $.identifier),
+      '(',
+      commaSep1(field('parameter', $.identifier)),
+      ')',
+      '=',
+      field('body', $.expression),
+    ),
+
+    // Numbered generator access: `R.0` (Sage's `R.gen(0)`).
+    sage_generator_access: $ => prec(PREC.call, seq(
+      field('object', $.primary_expression),
+      field('index', $.sage_generator_index),
+    )),
+
+    sage_generator_index: _ => token.immediate(/\.[0-9]+/),
+
+    // Ellipsis ranges: `[1..5]`, `[1, 3..9]`, `(a..b)`, `[1, .., n]`.
+    sage_ellipsis_span: $ => prec.right(-3, seq(
+      field('start', $.expression),
+      '..',
+      field('end', $.expression),
+    )),
+
+    sage_ellipsis: _ => '..',
+
+    // Empty-bracket constructor: `QQ[]`; only meaningful as the right
+    // side of a generator assignment, where lowering fills the names.
+    sage_empty_subscript: $ => prec(PREC.call, seq(
+      field('value', $.primary_expression),
+      '[',
+      ']',
+    )),
+
+    // Raw numeric literals: `5r`, `2.5R`, `0xEAr`, `5L`, `10jr`, `5rj`.
+    // A raw suffix requires `r`/`R`/`l`/`L`; a bare `j` suffix is an
+    // ordinary Python imaginary literal.
+    sage_raw_literal: _ => token(seq(
+      choice(
+        seq(choice('0x', '0X'), repeat1(/_?[A-Fa-f0-9]+/)),
+        seq(choice('0o', '0O'), repeat1(/_?[0-7]+/)),
+        seq(choice('0b', '0B'), repeat1(/_?[0-1]+/)),
+        seq(repeat1(/[0-9]+_?/), '.', repeat(/[0-9]+_?/), optional(seq(/[eE][+-]?/, repeat1(/[0-9]+_?/)))),
+        seq('.', repeat1(/[0-9]+_?/), optional(seq(/[eE][+-]?/, repeat1(/[0-9]+_?/)))),
+        seq(repeat1(/[0-9]+_?/), optional(seq(/[eE][+-]?/, repeat1(/[0-9]+_?/)))),
+      ),
+      choice(/[rR][jJ]?/, /[jJ][rR]/),
+    )),
+
     binary_operator: $ => {
       const table = [
         [prec.left, '+', PREC.plus],
@@ -781,7 +861,8 @@ module.exports = grammar({
         [prec.right, '**', PREC.power],
         [prec.left, '|', PREC.bitwise_or],
         [prec.left, '&', PREC.bitwise_and],
-        [prec.left, '^', PREC.xor],
+        [prec.right, '^', PREC.power],
+        [prec.left, '^^', PREC.xor],
         [prec.left, '<<', PREC.shift],
         [prec.left, '>>', PREC.shift],
       ];
@@ -852,7 +933,7 @@ module.exports = grammar({
       field('left', $._left_hand_side),
       field('operator', choice(
         '+=', '-=', '*=', '/=', '@=', '//=', '%=', '**=',
-        '>>=', '<<=', '&=', '^=', '|=',
+        '>>=', '<<=', '&=', '^=', '^^=', '|=',
       )),
       field('right', $._right_hand_side),
     ),
@@ -1034,12 +1115,13 @@ module.exports = grammar({
 
     parenthesized_expression: $ => prec(PREC.parenthesized_expression, seq(
       '(',
-      choice($.expression, $.yield),
+      choice($.sage_ellipsis_span, $.expression, $.yield),
       ')',
     )),
 
     _collection_elements: $ => seq(
       commaSep1(choice(
+        $.sage_ellipsis_span, $.sage_ellipsis,
         $.expression, $.yield, $.list_splat, $.parenthesized_list_splat,
       )),
       optional(','),
@@ -1151,20 +1233,6 @@ module.exports = grammar({
         ),
       ),
     )),
-
-    float: _ => {
-      const digits = repeat1(/[0-9]+_?/);
-      const exponent = seq(/[eE][\+-]?/, digits);
-
-      return token(seq(
-        choice(
-          seq(digits, '.', optional(digits), optional(exponent)),
-          seq(optional(digits), '.', digits, optional(exponent)),
-          seq(digits, exponent),
-        ),
-        optional(/[jJ]/),
-      ));
-    },
 
     identifier: _ => /[_\p{XID_Start}][_\p{XID_Continue}]*/,
 

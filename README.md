@@ -1,24 +1,24 @@
-# tree-sitter-python
+# tree-sitter-sage
 
-[![CI][ci]](https://github.com/tree-sitter/tree-sitter-python/actions/workflows/ci.yml)
-[![discord][discord]](https://discord.gg/w7nTvsVJhm)
-[![matrix][matrix]](https://matrix.to/#/#tree-sitter-chat:matrix.org)
-[![crates][crates]](https://crates.io/crates/tree-sitter-python)
-[![npm][npm]](https://www.npmjs.com/package/tree-sitter-python)
-[![pypi][pypi]](https://pypi.org/project/tree-sitter-python/)
+[Sage (SageMath)](https://www.sagemath.org/) grammar for
+[tree-sitter](https://github.com/tree-sitter/tree-sitter), maintained as a
+dialect fork of
+[tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python).
 
-Python grammar for [tree-sitter][].
+Sage source is Python plus a small syntax delta. This grammar adds exactly
+that delta and nothing else:
 
-[tree-sitter]: https://github.com/tree-sitter/tree-sitter
+- `sage_generator_assignment` — `R.<x, y> = QQ[]`, `F.<b>, f, g = S.field_extension()`
+- `sage_symbolic_function_assignment` — `f(x, y) = x^2 - y`
+- `sage_generator_access` — `R.0`
+- `sage_ellipsis_span` / `sage_ellipsis` — `[1..5]`, `[1, 3..9]`, `(a..b)`, `[1, .., n]`
+- `sage_raw_literal` — `5r`, `2.5R`, `0xEAr`, `10jr`
+- `sage_empty_subscript` — `QQ[]`
+- `^` is exponentiation (right-associative, power precedence); `^^`/`^^=` are xor
+- attribute calls on numeric literals — `1.sqrt()`, `15.10.sqrt()`
+- the `float` token lives in the external scanner so that `[1..5]`,
+  `1.sqrt()`, and `2.5r` lex correctly with one character of lookahead
 
-## References
-
-- [Python 2 Grammar](https://docs.python.org/2/reference/grammar.html)
-- [Python 3 Grammar](https://docs.python.org/3/reference/grammar.html)
-
-[ci]: https://img.shields.io/github/actions/workflow/status/tree-sitter/tree-sitter-python/ci.yml?logo=github&label=CI
-[discord]: https://img.shields.io/discord/1063097320771698699?logo=discord&label=discord
-[matrix]: https://img.shields.io/matrix/tree-sitter-chat%3Amatrix.org?logo=matrix&label=matrix
-[npm]: https://img.shields.io/npm/v/tree-sitter-python?logo=npm
-[crates]: https://img.shields.io/crates/v/tree-sitter-python?logo=rust
-[pypi]: https://img.shields.io/pypi/v/tree-sitter-python?logo=pypi&logoColor=ffd242
+Ordinary Python syntax is inherited from upstream and kept unpatched: general
+Python fixes belong in tree-sitter-python and arrive here by merging upstream.
+The full upstream corpus passes unchanged.

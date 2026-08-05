@@ -1,22 +1,23 @@
 {
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
-      "name": "python",
-      "camelcase": "Python",
-      "scope": "source.python",
+      "name": "sage",
+      "camelcase": "Sage",
+      "scope": "source.sage",
       "path": ".",
       "file-types": [
-        "py"
+        "sage"
       ],
       "highlights": "queries/highlights.scm",
       "tags": "queries/tags.scm",
-      "injection-regex": "py"
+      "injection-regex": "sage"
     }
   ],
   "metadata": {
     "version": "0.25.0",
     "license": "MIT",
-    "description": "Python grammar for tree-sitter",
+    "description": "Sage (SageMath) grammar for tree-sitter, a dialect fork of tree-sitter-sage",
     "authors": [
       {
         "name": "Max Brunsfeld",
@@ -28,15 +29,17 @@
       }
     ],
     "links": {
-      "repository": "https://github.com/tree-sitter/tree-sitter-python"
+      "repository": "https://github.com/tree-sitter/tree-sitter-sage"
     }
   },
   "bindings": {
     "c": true,
     "go": true,
+    "java": false,
     "node": true,
     "python": true,
     "rust": true,
-    "swift": true
+    "swift": true,
+    "zig": false
   }
 }

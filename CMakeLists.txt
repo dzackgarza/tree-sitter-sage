@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(tree-sitter-python
+project(tree-sitter-sage
         VERSION "0.25.0"
         DESCRIPTION "Python grammar for tree-sitter"
-        HOMEPAGE_URL "https://github.com/tree-sitter/tree-sitter-python"
+        HOMEPAGE_URL "https://github.com/tree-sitter/tree-sitter-sage"
         LANGUAGES C)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
@@ -19,42 +19,52 @@ include(GNUInstallDirs)
 
 find_program(TREE_SITTER_CLI tree-sitter DOC "Tree-sitter CLI")
 
+add_custom_command(OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/src/grammar.json"
+                          "${CMAKE_CURRENT_SOURCE_DIR}/src/node-types.json"
+                   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/grammar.js"
+                   COMMAND "${TREE_SITTER_CLI}" generate grammar.js --no-parser
+                   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                   COMMENT "Generating grammar.json")
+
 add_custom_command(OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/src/parser.c"
+                   BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/src/tree_sitter/parser.h"
+                              "${CMAKE_CURRENT_SOURCE_DIR}/src/tree_sitter/alloc.h"
+                              "${CMAKE_CURRENT_SOURCE_DIR}/src/tree_sitter/array.h"
                    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/grammar.json"
                    COMMAND "${TREE_SITTER_CLI}" generate src/grammar.json
                             --abi=${TREE_SITTER_ABI_VERSION}
                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
                    COMMENT "Generating parser.c")
 
-add_library(tree-sitter-python src/parser.c)
+add_library(tree-sitter-sage src/parser.c)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/scanner.c)
-  target_sources(tree-sitter-python PRIVATE src/scanner.c)
+  target_sources(tree-sitter-sage PRIVATE src/scanner.c)
 endif()
-target_include_directories(tree-sitter-python
+target_include_directories(tree-sitter-sage
                            PRIVATE src
                            INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/bindings/c>
                                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-target_compile_definitions(tree-sitter-python PRIVATE
+target_compile_definitions(tree-sitter-sage PRIVATE
                            $<$<BOOL:${TREE_SITTER_REUSE_ALLOCATOR}>:TREE_SITTER_REUSE_ALLOCATOR>
                            $<$<CONFIG:Debug>:TREE_SITTER_DEBUG>)
 
-set_target_properties(tree-sitter-python
+set_target_properties(tree-sitter-sage
                       PROPERTIES
                       C_STANDARD 11
                       POSITION_INDEPENDENT_CODE ON
                       SOVERSION "${TREE_SITTER_ABI_VERSION}.${PROJECT_VERSION_MAJOR}"
                       DEFINE_SYMBOL "")
 
-configure_file(bindings/c/tree-sitter-python.pc.in
-               "${CMAKE_CURRENT_BINARY_DIR}/tree-sitter-python.pc" @ONLY)
+configure_file(bindings/c/tree-sitter-sage.pc.in
+               "${CMAKE_CURRENT_BINARY_DIR}/tree-sitter-sage.pc" @ONLY)
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bindings/c/tree_sitter"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
         FILES_MATCHING PATTERN "*.h")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tree-sitter-python.pc"
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tree-sitter-sage.pc"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
-install(TARGETS tree-sitter-python
+install(TARGETS tree-sitter-sage
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
 file(GLOB QUERIES queries/*.scm)

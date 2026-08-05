@@ -1,14 +1,14 @@
-package tree_sitter_python_test
+package tree_sitter_sage_test
 
 import (
 	"testing"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	tree_sitter_sage "github.com/tree-sitter/tree-sitter-sage/bindings/go"
 )
 
 func TestCanLoadGrammar(t *testing.T) {
-	language := tree_sitter.NewLanguage(tree_sitter_python.Language())
+	language := tree_sitter.NewLanguage(tree_sitter_sage.Language())
 	if language == nil {
 		t.Errorf("Error loading Python grammar")
 	}

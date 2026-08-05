@@ -19,6 +19,7 @@ enum TokenType {
     CLOSE_BRACKET,
     CLOSE_BRACE,
     EXCEPT,
+    FLOAT,
 };
 
 typedef enum {
@@ -92,7 +93,16 @@ static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
-bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
+
+static inline bool is_id_start(int32_t c) {
+    return c == '_' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c > 127;
+}
+
+static inline bool is_id_continue(int32_t c) {
+    return is_id_start(c) || ('0' <= c && c <= '9');
+}
+
+bool tree_sitter_sage_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
     Scanner *scanner = (Scanner *)payload;
 
     bool error_recovery_mode = valid_symbols[STRING_CONTENT] && valid_symbols[INDENT];
@@ -298,6 +308,71 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer, con
         }
     }
 
+
+    if (valid_symbols[FLOAT] &&
+        (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '.')) {
+        bool has_digits = false;
+        bool is_float = false;
+        while (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '_') {
+            has_digits = true;
+            advance(lexer);
+        }
+        if (lexer->lookahead == '.') {
+            advance(lexer);
+            if (lexer->lookahead == '.') {
+                // A Sage range ellipsis follows (`1..5`); the dot is not part
+                // of a float, so the integer and `..` tokens lex instead.
+                return false;
+            }
+            if (!has_digits && !('0' <= lexer->lookahead && lexer->lookahead <= '9')) {
+                return false; // a lone '.' operator
+            }
+            if (is_id_start(lexer->lookahead) && lexer->lookahead != 'e' && lexer->lookahead != 'E' &&
+                lexer->lookahead != 'j' && lexer->lookahead != 'J') {
+                // Sage attribute access on an integer literal: `1.sqrt()`.
+                return false;
+            }
+            is_float = true;
+            while (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '_') {
+                advance(lexer);
+            }
+        }
+        lexer->mark_end(lexer);
+        if ((has_digits || is_float) && (lexer->lookahead == 'e' || lexer->lookahead == 'E')) {
+            advance(lexer);
+            if (lexer->lookahead == '+' || lexer->lookahead == '-') {
+                advance(lexer);
+            }
+            if ('0' <= lexer->lookahead && lexer->lookahead <= '9') {
+                while (('0' <= lexer->lookahead && lexer->lookahead <= '9') || lexer->lookahead == '_') {
+                    advance(lexer);
+                }
+                is_float = true;
+                lexer->mark_end(lexer);
+            } else if (!is_float) {
+                return false; // `1eels`: an integer followed by an identifier
+            }
+        }
+        if (!is_float) {
+            return false; // a plain integer: the internal lexer owns it
+        }
+        if (lexer->lookahead == 'r' || lexer->lookahead == 'R') {
+            return false; // a Sage raw literal (`2.5r`): internal token
+        }
+        if (lexer->lookahead == 'j' || lexer->lookahead == 'J') {
+            advance(lexer);
+            if (lexer->lookahead == 'r' || lexer->lookahead == 'R') {
+                return false; // a Sage raw complex literal (`2.5jr`)
+            }
+            if (is_id_continue(lexer->lookahead)) {
+                return false; // `1.junk`: attribute access on an integer
+            }
+            lexer->mark_end(lexer);
+        }
+        lexer->result_symbol = FLOAT;
+        return true;
+    }
+
     if (first_comment_indent_length == -1 && valid_symbols[STRING_START]) {
         Delimiter delimiter = new_delimiter();
 
@@ -361,7 +436,7 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer, con
     return false;
 }
 
-unsigned tree_sitter_python_external_scanner_serialize(void *payload, char *buffer) {
+unsigned tree_sitter_sage_external_scanner_serialize(void *payload, char *buffer) {
     Scanner *scanner = (Scanner *)payload;
 
     size_t size = 0;
@@ -389,7 +464,7 @@ unsigned tree_sitter_python_external_scanner_serialize(void *payload, char *buff
     return size;
 }
 
-void tree_sitter_python_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {
+void tree_sitter_sage_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {
     Scanner *scanner = (Scanner *)payload;
 
     array_delete(&scanner->delimiters);
@@ -416,7 +491,7 @@ void tree_sitter_python_external_scanner_deserialize(void *payload, const char *
     }
 }
 
-void *tree_sitter_python_external_scanner_create() {
+void *tree_sitter_sage_external_scanner_create() {
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
     _Static_assert(sizeof(Delimiter) == sizeof(char), "");
 #else
@@ -425,11 +500,11 @@ void *tree_sitter_python_external_scanner_create() {
     Scanner *scanner = calloc(1, sizeof(Scanner));
     array_init(&scanner->indents);
     array_init(&scanner->delimiters);
-    tree_sitter_python_external_scanner_deserialize(scanner, NULL, 0);
+    tree_sitter_sage_external_scanner_deserialize(scanner, NULL, 0);
     return scanner;
 }
 
-void tree_sitter_python_external_scanner_destroy(void *payload) {
+void tree_sitter_sage_external_scanner_destroy(void *payload) {
     Scanner *scanner = (Scanner *)payload;
     array_delete(&scanner->indents);
     array_delete(&scanner->delimiters);

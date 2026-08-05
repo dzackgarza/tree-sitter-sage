@@ -1,8 +1,8 @@
 {
-  "name": "tree-sitter-python",
+  "name": "tree-sitter-sage",
   "version": "0.25.0",
-  "description": "Python grammar for tree-sitter",
-  "repository": "https://github.com/tree-sitter/tree-sitter-python",
+  "description": "Sage grammar for tree-sitter (dialect fork of tree-sitter-sage)",
+  "repository": "https://github.com/tree-sitter/tree-sitter-sage",
   "license": "MIT",
   "author": {
     "name": "Max Brunsfeld",

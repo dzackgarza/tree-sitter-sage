@@ -1,0 +1,398 @@
+================================================================================
+Sage: generator assignment
+================================================================================
+
+R.<x, y> = QQ[]
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_generator_assignment
+    (identifier)
+    (identifier)
+    (identifier)
+    (sage_empty_subscript
+      (identifier))))
+
+================================================================================
+Sage: generator assignment with extra targets
+================================================================================
+
+F.<b>, f, g = S.field_extension()
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_generator_assignment
+    (identifier)
+    (identifier)
+    (identifier)
+    (identifier)
+    (call
+      (attribute
+        (identifier)
+        (identifier))
+      (argument_list))))
+
+================================================================================
+Sage: generator assignment without spaces
+================================================================================
+
+R.<x,y>=PolynomialRing(QQ)
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_generator_assignment
+    (identifier)
+    (identifier)
+    (identifier)
+    (call
+      (identifier)
+      (argument_list
+        (identifier)))))
+
+================================================================================
+Sage: generator assignment with nested empty brackets
+================================================================================
+
+S.<q> = QQ[[]]
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_generator_assignment
+    (identifier)
+    (identifier)
+    (subscript
+      (identifier)
+      (list))))
+
+================================================================================
+Sage: symbolic function assignment
+================================================================================
+
+f(x, y) = x^2 - y
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_symbolic_function_assignment
+    (identifier)
+    (identifier)
+    (identifier)
+    (binary_operator
+      (binary_operator
+        (identifier)
+        (integer))
+      (identifier))))
+
+================================================================================
+Sage: symbolic function assignment with negated body
+================================================================================
+
+f(x) =- 5
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_symbolic_function_assignment
+    (identifier)
+    (identifier)
+    (unary_operator
+      (integer))))
+
+================================================================================
+Sage: generator access
+================================================================================
+
+r = R.0
+d = R.0.degree()
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_generator_access
+      (identifier)
+      (sage_generator_index)))
+  (assignment
+    (identifier)
+    (call
+      (attribute
+        (sage_generator_access
+          (identifier)
+          (sage_generator_index))
+        (identifier))
+      (argument_list))))
+
+================================================================================
+Sage: raw numeric literals
+================================================================================
+
+a = 5r
+b = 2.5R
+c = 10jr
+d = 0xEAr
+e2 = 5rj
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_raw_literal))
+  (assignment
+    (identifier)
+    (sage_raw_literal))
+  (assignment
+    (identifier)
+    (sage_raw_literal))
+  (assignment
+    (identifier)
+    (sage_raw_literal))
+  (assignment
+    (identifier)
+    (sage_raw_literal)))
+
+================================================================================
+Sage: caret is right-associative exponentiation
+================================================================================
+
+p = 2^3^2
+q = 2^3*5
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (binary_operator
+      (integer)
+      (binary_operator
+        (integer)
+        (integer))))
+  (assignment
+    (identifier)
+    (binary_operator
+      (binary_operator
+        (integer)
+        (integer))
+      (integer))))
+
+================================================================================
+Sage: double caret is xor
+================================================================================
+
+q = 8^^1
+x ^= 2
+x ^^= 3
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (binary_operator
+      (integer)
+      (integer)))
+  (augmented_assignment
+    (identifier)
+    (integer))
+  (augmented_assignment
+    (identifier)
+    (integer)))
+
+================================================================================
+Sage: ellipsis ranges
+================================================================================
+
+r = [1..5]
+s = [1, 3..9]
+t = (a..b)
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (list
+      (sage_ellipsis_span
+        (integer)
+        (integer))))
+  (assignment
+    (identifier)
+    (list
+      (integer)
+      (sage_ellipsis_span
+        (integer)
+        (integer))))
+  (assignment
+    (identifier)
+    (parenthesized_expression
+      (sage_ellipsis_span
+        (identifier)
+        (identifier)))))
+
+================================================================================
+Sage: bare ellipsis elements
+================================================================================
+
+u = [1, .., 2, .., len(v)]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (list
+      (integer)
+      (sage_ellipsis)
+      (integer)
+      (sage_ellipsis)
+      (call
+        (identifier)
+        (argument_list
+          (identifier))))))
+
+================================================================================
+Sage: ellipsis range with expression endpoints
+================================================================================
+
+w = [f(x) .. L[10]]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (list
+      (sage_ellipsis_span
+        (call
+          (identifier)
+          (argument_list
+            (identifier)))
+        (subscript
+          (identifier)
+          (integer))))))
+
+================================================================================
+Sage: attribute calls on numeric literals
+================================================================================
+
+h = 1.sqrt()
+g = 15.10.sqrt()
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (call
+      (attribute
+        (integer)
+        (identifier))
+      (argument_list)))
+  (assignment
+    (identifier)
+    (call
+      (attribute
+        (float)
+        (identifier))
+      (argument_list))))
+
+================================================================================
+Sage: floats keep their Python shapes
+================================================================================
+
+a = 1.5
+b = 5.
+c = .5
+d = 1e5
+e2 = 1.5e-3j
+z = 5.j
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (float)))
+
+================================================================================
+Sage: python ellipsis and slices are untouched
+================================================================================
+
+j = d[...]
+k = xs[1:3]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (subscript
+      (identifier)
+      (ellipsis)))
+  (assignment
+    (identifier)
+    (subscript
+      (identifier)
+      (slice
+        (integer)
+        (integer)))))
+
+================================================================================
+Sage: python imaginary and long suffixes are untouched
+================================================================================
+
+a = 5j
+b = 5L
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (integer))
+  (assignment
+    (identifier)
+    (integer)))
+
+================================================================================
+Sage: match statements with literal patterns
+================================================================================
+
+match p:
+    case 1 | 2:
+        pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (match_statement
+    (identifier)
+    (block
+      (case_clause
+        (case_pattern
+          (union_pattern
+            (integer)
+            (integer)))
+        (block
+          (pass_statement))))))

@@ -106,6 +106,14 @@
         "named": true
       },
       {
+        "type": "sage_generator_assignment",
+        "named": true
+      },
+      {
+        "type": "sage_symbolic_function_assignment",
+        "named": true
+      },
+      {
         "type": "type_alias_statement",
         "named": true
       }
@@ -321,6 +329,18 @@
       },
       {
         "type": "parenthesized_expression",
+        "named": true
+      },
+      {
+        "type": "sage_empty_subscript",
+        "named": true
+      },
+      {
+        "type": "sage_generator_access",
+        "named": true
+      },
+      {
+        "type": "sage_raw_literal",
         "named": true
       },
       {
@@ -616,6 +636,10 @@
             "named": false
           },
           {
+            "type": "^^=",
+            "named": false
+          },
+          {
             "type": "|=",
             "named": false
           }
@@ -732,6 +756,10 @@
           },
           {
             "type": "^",
+            "named": false
+          },
+          {
+            "type": "^^",
             "named": false
           },
           {
@@ -2257,6 +2285,14 @@
           "named": true
         },
         {
+          "type": "sage_ellipsis",
+          "named": true
+        },
+        {
+          "type": "sage_ellipsis_span",
+          "named": true
+        },
+        {
           "type": "yield",
           "named": true
         }
@@ -2551,6 +2587,10 @@
           "named": true
         },
         {
+          "type": "sage_ellipsis_span",
+          "named": true
+        },
+        {
           "type": "yield",
           "named": true
         }
@@ -2696,6 +2736,181 @@
     }
   },
   {
+    "type": "sage_ellipsis",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "sage_ellipsis_span",
+    "named": true,
+    "fields": {
+      "end": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "start": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "sage_empty_subscript",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "primary_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "sage_generator_access",
+    "named": true,
+    "fields": {
+      "index": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "sage_generator_index",
+            "named": true
+          }
+        ]
+      },
+      "object": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "primary_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "sage_generator_assignment",
+    "named": true,
+    "fields": {
+      "generator": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "other_target": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "assignment",
+            "named": true
+          },
+          {
+            "type": "augmented_assignment",
+            "named": true
+          },
+          {
+            "type": "expression",
+            "named": true
+          },
+          {
+            "type": "expression_list",
+            "named": true
+          },
+          {
+            "type": "pattern_list",
+            "named": true
+          },
+          {
+            "type": "yield",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "sage_symbolic_function_assignment",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "set",
     "named": true,
     "fields": {},
@@ -2713,6 +2928,14 @@
         },
         {
           "type": "parenthesized_list_splat",
+          "named": true
+        },
+        {
+          "type": "sage_ellipsis",
+          "named": true
+        },
+        {
+          "type": "sage_ellipsis_span",
           "named": true
         },
         {
@@ -2925,6 +3148,14 @@
         },
         {
           "type": "parenthesized_list_splat",
+          "named": true
+        },
+        {
+          "type": "sage_ellipsis",
+          "named": true
+        },
+        {
+          "type": "sage_ellipsis_span",
           "named": true
         },
         {
@@ -3424,6 +3655,14 @@
     "named": false
   },
   {
+    "type": "..",
+    "named": false
+  },
+  {
+    "type": ".<",
+    "named": false
+  },
+  {
     "type": "/",
     "named": false
   },
@@ -3521,6 +3760,14 @@
   },
   {
     "type": "^=",
+    "named": false
+  },
+  {
+    "type": "^^",
+    "named": false
+  },
+  {
+    "type": "^^=",
     "named": false
   },
   {
@@ -3700,6 +3947,14 @@
   {
     "type": "return",
     "named": false
+  },
+  {
+    "type": "sage_generator_index",
+    "named": true
+  },
+  {
+    "type": "sage_raw_literal",
+    "named": true
   },
   {
     "type": "string_end",
