@@ -44,6 +44,9 @@ jobs:
           test-rust: true
           test-node: true
           test-python: true
+          # The Python bindings declare requires-python >=3.14; the
+          # action's default interpreter is older.
+          python-version: '3.14'
           test-go: true
           test-swift: true
       - name: Set up examples

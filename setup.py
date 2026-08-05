@@ -9,7 +9,7 @@ from wheel.bdist_wheel import bdist_wheel
 
 
 class Build(build):
-    def run(self):
+    def run(self) -> None:
         if path.isdir("queries"):
             dest = path.join(self.build_lib, "tree_sitter_sage", "queries")
             self.copy_tree("queries", dest)
@@ -17,7 +17,7 @@ class Build(build):
 
 
 class BuildExt(build_ext):
-    def build_extension(self, ext: Extension):
+    def build_extension(self, ext: Extension) -> None:
         if self.compiler.compiler_type != "msvc":
             ext.extra_compile_args = ["-std=c11", "-fvisibility=hidden"]
         else:
@@ -30,7 +30,7 @@ class BuildExt(build_ext):
 
 
 class BdistWheel(bdist_wheel):
-    def get_tag(self):
+    def get_tag(self) -> tuple[str, str, str]:
         python, abi, platform = super().get_tag()
         if python.startswith("cp") and not get_config_var("Py_GIL_DISABLED"):
             python, abi = "cp310", "abi3"
@@ -38,7 +38,7 @@ class BdistWheel(bdist_wheel):
 
 
 class EggInfo(egg_info):
-    def find_sources(self):
+    def find_sources(self) -> None:
         super().find_sources()
         self.filelist.recursive_include("queries", "*.scm")
         self.filelist.include("src/tree_sitter/*.h")
@@ -46,7 +46,7 @@ class EggInfo(egg_info):
 
 setup(
     packages=find_packages("bindings/python") + ["sagepython"],
-    package_dir={"": "bindings/python", "sagepython": "sagepython"},
+    package_dir={"": "bindings/python", "sagepython": "src/sagepython"},
     install_requires=["tree-sitter"],
     package_data={
         "tree_sitter_sage": ["*.pyi", "py.typed"],
@@ -74,5 +74,5 @@ setup(
         "bdist_wheel": BdistWheel,
         "egg_info": EggInfo,
     },
-    zip_safe=False
+    zip_safe=False,
 )

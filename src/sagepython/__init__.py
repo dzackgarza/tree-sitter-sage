@@ -13,12 +13,13 @@ CPython compiles the output as the semantic authority.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as dataclass_field, replace
-from collections.abc import Mapping, Sequence
-from typing import Callable
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 
 import tree_sitter_sage
-from tree_sitter import Language, Node, Parser
+
+from tree_sitter import Language, Node, Parser, Tree
 
 _LANGUAGE = Language(tree_sitter_sage.language())
 _PARSER = Parser(_LANGUAGE)
@@ -30,7 +31,7 @@ _RAW_SUFFIX = re.compile(r"[rRlLjJ]+$")
 @dataclass(frozen=True)
 class _Context:
     source: bytes
-    rules: "Mapping[str, LoweringRule]"
+    rules: Mapping[str, LoweringRule]
     wrap_numbers: bool = True
     in_case_pattern: bool = False
 
@@ -38,7 +39,7 @@ class _Context:
         return self.source[node.start_byte : node.end_byte].decode("utf-8")
 
 
-def _segments(node: Node, context: _Context) -> list["Segment"]:
+def _segments(node: Node, context: _Context) -> list[Segment]:
     """Lower ``node`` into source-mapped segments.
 
     Nodes with a lowering rule become one rebuilt segment covering the
@@ -137,9 +138,7 @@ class SourceMap:
             end = cursor + len(segment.text.encode("utf-8"))
             if generated_offset < end or segment is self.segments[-1]:
                 if segment.exact:
-                    return segment.original_start + max(
-                        0, min(generated_offset, end) - cursor
-                    )
+                    return segment.original_start + max(0, min(generated_offset, end) - cursor)
                 return segment.original_start
             cursor = end
         return len(self.original.encode("utf-8"))
@@ -219,7 +218,7 @@ class LoweredSource:
 
     python: str
     source_map: SourceMap
-    _tree: object = dataclass_field(default=None, repr=False, compare=False)
+    _tree: Tree | None = dataclass_field(default=None, repr=False, compare=False)
     _wrap_numbers: bool = dataclass_field(default=True, repr=False, compare=False)
 
 
@@ -254,6 +253,7 @@ def _gap(left: Node, right: Node, context: _Context) -> str:
 # ---------------------------------------------------------------------------
 # Numeric literals
 # ---------------------------------------------------------------------------
+
 
 def _integer_stem(text: str) -> str:
     stripped = text.lstrip("0")
@@ -327,14 +327,7 @@ def _lower_factorial(node: Node, context: _Context) -> str:
 
 
 def _lower_matrix_literal(node: Node, context: _Context) -> str:
-    rows = ", ".join(
-        "["
-        + ", ".join(
-            _lower(element, context) for element in _named_elements(row)
-        )
-        + "]"
-        for row in node.children_by_field_name("row")
-    )
+    rows = ", ".join("[" + ", ".join(_lower(element, context) for element in _named_elements(row)) + "]" for row in node.children_by_field_name("row"))
     return f"matrix([{rows}])"
 
 
@@ -346,38 +339,25 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
     left = node.child_by_field_name("left")
     right = node.child_by_field_name("right")
     assert left is not None and right is not None
-    return (
-        _lower(left, context)
-        + "*"
-        + _gap(left, right, context)
-        + _lower(right, context)
-    )
+    return _lower(left, context) + "*" + _gap(left, right, context) + _lower(right, context)
 
 
 # ---------------------------------------------------------------------------
 # Generators and symbolic functions
 # ---------------------------------------------------------------------------
 
+
 def _lower_generator_assignment(node: Node, context: _Context) -> str:
     name = node.child_by_field_name("name")
     right = node.child_by_field_name("right")
     assert name is not None and right is not None
-    generators = [
-        context.text(child)
-        for child in node.children_by_field_name("generator")
-    ]
-    others = [
-        context.text(child)
-        for child in node.children_by_field_name("other_target")
-    ]
+    generators = [context.text(child) for child in node.children_by_field_name("generator")]
+    others = [context.text(child) for child in node.children_by_field_name("other_target")]
     constructor = _lower_constructor(right, generators, context)
     obj = context.text(name)
     targets = "".join(f", {other}" for other in others)
     gens = ", ".join(generators)
-    return (
-        f"{obj}{targets} = {constructor}; "
-        f"({gens},) = {obj}._first_ngens({len(generators)})"
-    )
+    return f"{obj}{targets} = {constructor}; ({gens},) = {obj}._first_ngens({len(generators)})"
 
 
 def _lower_constructor(right: Node, generators: list[str], context: _Context) -> str:
@@ -391,18 +371,14 @@ def _lower_constructor(right: Node, generators: list[str], context: _Context) ->
         arguments = right.child_by_field_name("arguments")
         assert arguments is not None
         lowered = _lower(right, context)
-        has_arguments = any(
-            child.is_named for child in arguments.children
-        )
+        has_arguments = any(child.is_named for child in arguments.children)
         comma = ", " if has_arguments else ""
         assert lowered.endswith(")")
         return f"{lowered[:-1]}{comma}names={names})"
     if right.type == "subscript":
         # `S.<q> = QQ[[]]`: fill an empty innermost bracket with the names.
         subscript = right.child_by_field_name("subscript")
-        if subscript is not None and subscript.type == "list" and not any(
-            child.is_named for child in subscript.children
-        ):
+        if subscript is not None and subscript.type == "list" and not any(child.is_named for child in subscript.children):
             value = right.child_by_field_name("value")
             assert value is not None
             quoted = "'" + ", ".join(generators) + "'"
@@ -414,15 +390,8 @@ def _lower_symbolic_function(node: Node, context: _Context) -> str:
     name = node.child_by_field_name("name")
     body = node.child_by_field_name("body")
     assert name is not None and body is not None
-    parameters = ",".join(
-        context.text(child)
-        for child in node.children_by_field_name("parameter")
-    )
-    return (
-        f'__tmp__=var("{parameters}"); '
-        f"{context.text(name)} = "
-        f"symbolic_expression({_lower(body, context)}).function({parameters})"
-    )
+    parameters = ",".join(context.text(child) for child in node.children_by_field_name("parameter"))
+    return f'__tmp__=var("{parameters}"); {context.text(name)} = symbolic_expression({_lower(body, context)}).function({parameters})'
 
 
 def _lower_generator_access(node: Node, context: _Context) -> str:
@@ -437,6 +406,7 @@ def _lower_generator_access(node: Node, context: _Context) -> str:
 # Ellipsis ranges
 # ---------------------------------------------------------------------------
 
+
 def _ellipsis_arguments(elements: list[Node], context: _Context) -> str:
     pieces = []
     for element in elements:
@@ -444,9 +414,7 @@ def _ellipsis_arguments(elements: list[Node], context: _Context) -> str:
             start = element.child_by_field_name("start")
             end = element.child_by_field_name("end")
             assert start is not None and end is not None
-            pieces.append(
-                f"{_lower(start, context)},Ellipsis,{_lower(end, context)}"
-            )
+            pieces.append(f"{_lower(start, context)},Ellipsis,{_lower(end, context)}")
         elif element.type == "sage_ellipsis":
             pieces.append("Ellipsis")
         else:
@@ -455,10 +423,7 @@ def _ellipsis_arguments(elements: list[Node], context: _Context) -> str:
 
 
 def _has_ellipsis(elements: list[Node]) -> bool:
-    return any(
-        element.type in {"sage_ellipsis_span", "sage_ellipsis"}
-        for element in elements
-    )
+    return any(element.type in {"sage_ellipsis_span", "sage_ellipsis"} for element in elements)
 
 
 def _named_elements(node: Node) -> list[Node]:
@@ -486,8 +451,6 @@ def _lower_tuple(node: Node, context: _Context) -> str | None:
     return None
 
 
-
-
 # ---------------------------------------------------------------------------
 # The lowering table and the preparser
 # ---------------------------------------------------------------------------
@@ -512,6 +475,7 @@ _LOWERINGS: dict[str, LoweringRule] = {
     "tuple": _lower_tuple,
 }
 
+
 def _byte_point(encoded: bytes, offset: int) -> tuple[int, int]:
     prefix = encoded[:offset]
     return prefix.count(b"\n"), offset - (prefix.rfind(b"\n") + 1)
@@ -521,7 +485,7 @@ def lower(
     source: str,
     wrap_numbers: bool = True,
     previous: LoweredSource | None = None,
-    extensions: Sequence["Mapping[str, LoweringRule]"] = (),
+    extensions: Sequence[Mapping[str, LoweringRule]] = (),
 ) -> LoweredSource:
     r"""Compile SagePython source to ordinary Python plus a source map.
 
@@ -536,25 +500,18 @@ def lower(
     for extension in extensions:
         rules.update(extension)
     old_tree = None
-    if (
-        previous is not None
-        and previous._tree is not None
-        and previous._wrap_numbers == wrap_numbers
-    ):
+    if previous is not None and previous._tree is not None and previous._wrap_numbers == wrap_numbers:
         old = previous.source_map.original.encode("utf-8")
         prefix = 0
         limit = min(len(old), len(encoded))
         while prefix < limit and old[prefix] == encoded[prefix]:
             prefix += 1
         suffix = 0
-        while (
-            suffix < limit - prefix
-            and old[len(old) - 1 - suffix] == encoded[len(encoded) - 1 - suffix]
-        ):
+        while suffix < limit - prefix and old[len(old) - 1 - suffix] == encoded[len(encoded) - 1 - suffix]:
             suffix += 1
         old_end = len(old) - suffix
         new_end = len(encoded) - suffix
-        previous._tree.edit(  # type: ignore[attr-defined]
+        previous._tree.edit(
             start_byte=prefix,
             old_end_byte=old_end,
             new_end_byte=new_end,

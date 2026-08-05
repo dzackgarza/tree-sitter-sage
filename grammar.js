@@ -54,7 +54,8 @@ const FEATURE_MODULES = [
 ];
 
 function enabledFeatures() {
-  const setting = process.env.SAGE_FEATURES ?? 'all';
+  const setting =
+    process.env.SAGE_FEATURES === undefined ? 'all' : process.env.SAGE_FEATURES;
   if (setting === 'all') {
     return FEATURE_MODULES;
   }
@@ -68,9 +69,11 @@ function enabledFeatures() {
 function composed(definition) {
   for (const feature of enabledFeatures()) {
     Object.assign(definition.rules, feature.rules);
-    for (const [name, addition] of Object.entries(feature.extend ?? {})) {
-      const base = definition.rules[name];
-      definition.rules[name] = ($) => choice(addition($), base($));
+    if (feature.extend !== undefined) {
+      for (const [name, addition] of Object.entries(feature.extend)) {
+        const base = definition.rules[name];
+        definition.rules[name] = ($) => choice(addition($), base($));
+      }
     }
     if (feature.conflicts) {
       const base = definition.conflicts;

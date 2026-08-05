@@ -31,6 +31,7 @@ from sagepython import (
 # Brace notation: sets and the research set-builder forms
 # ---------------------------------------------------------------------------
 
+
 def _and_chain(node: Node) -> list[Node]:
     """Flatten a left-associated ``and`` chain into its operands."""
     if node.type == "boolean_operator":
@@ -48,11 +49,7 @@ def _comparison_chain(node: Node) -> tuple[list[Node], list[str]] | None:
     if node.type != "comparison_operator":
         return None
     operands = [child for child in node.children if child.is_named]
-    operators = [
-        operator.text.decode()
-        for operator in node.children_by_field_name("operators")
-        if operator.text is not None
-    ]
+    operators = [operator.text.decode() for operator in node.children_by_field_name("operators") if operator.text is not None]
     if len(operands) != len(operators) + 1:
         return None
     return operands, operators
@@ -78,9 +75,7 @@ def _lower_builder(element: Node, context: Context) -> str | None:
         return None
     operands, operators = comparison
 
-    condition_text = " and ".join(
-        lower_node(condition, context) for condition in conditions
-    )
+    condition_text = " and ".join(lower_node(condition, context) for condition in conditions)
 
     # Form A — `{image | x in domain [and P...]}`:
     # comparison(bitor(image, x), in, domain) [wrapped in `and` chain].
@@ -103,19 +98,14 @@ def _lower_builder(element: Node, context: Context) -> str | None:
     if operands[0].type == "identifier" and operators[0] == "in":
         split = _top_bitwise_or(operands[1])
         if split is not None:
-            domain, predicate_head = split
-            variable_text = (
-                operands[0].text.decode() if operands[0].text else ""
-            )
+            domain_node, predicate_head = split
+            variable_text = operands[0].text.decode() if operands[0].text else ""
             predicate = lower_node(predicate_head, context)
             for operator, operand in zip(operators[1:], operands[2:]):
                 predicate += f" {operator} {lower_node(operand, context)}"
             if condition_text:
                 predicate = f"{predicate} and {condition_text}"
-            return (
-                f"ConditionSet({lower_node(domain, context)}, "
-                f"lambda {variable_text}: {predicate})"
-            )
+            return f"ConditionSet({lower_node(domain_node, context)}, lambda {variable_text}: {predicate})"
     return None
 
 
