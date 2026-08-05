@@ -43,8 +43,20 @@ def _segments(node: Node, context: _Context) -> list["Segment"]:
 
     Nodes with a lowering rule become one rebuilt segment covering the
     construct; other nodes interleave verbatim gaps with their children's
-    segments.
+    segments.  Parse-error regions are never lowered: rules firing on
+    recovered fragments can assemble accidentally-compilable garbage, so
+    the author's text passes through verbatim and CPython reports the
+    real mistake at its real position (sage#38949's failure class).
     """
+    if node.is_error or node.is_missing:
+        return [
+            Segment(
+                text=context.text(node),
+                original_start=node.start_byte,
+                original_end=node.end_byte,
+                exact=True,
+            )
+        ]
     if node.type == "case_pattern" and not context.in_case_pattern:
         context = replace(context, in_case_pattern=True)
     rule = context.rules.get(node.type)
@@ -212,6 +224,8 @@ class LoweredSource:
 
 
 def _lower(node: Node, context: _Context) -> str:
+    if node.is_error or node.is_missing:
+        return context.text(node)
     if node.type == "case_pattern" and not context.in_case_pattern:
         context = replace(context, in_case_pattern=True)
     rule = context.rules.get(node.type)

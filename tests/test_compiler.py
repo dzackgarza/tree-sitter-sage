@@ -84,3 +84,35 @@ def test_incremental_source_map_translates_like_a_fresh_one() -> None:
         2, generated_column
     ) == fresh.source_map.original_position(2, generated_column)
     assert incremental.source_map.original_position(2, generated_column) == (2, 10)
+
+
+def test_error_regions_pass_through_unlowered() -> None:
+    # sage#38949: `0..2` outside brackets is invalid; upstream reported
+    # the error on the wrong line, and lowering recovered fragments here
+    # once produced accidentally-compilable garbage.  The correct outer
+    # loop still lowers; the broken line reaches CPython verbatim.
+    result = lower("for a in [0..2]:\n    for b in 0..2:\n        pass\n")
+    assert "ellipsis_range" in result.python.splitlines()[0]
+    try:
+        compile(result.python, "<cell>", "exec")
+        raise AssertionError("invalid input compiled")
+    except SyntaxError as error:
+        assert error.lineno == 2
+
+
+def test_literal_assignment_stays_a_clean_error() -> None:
+    # sage#24971: `0 = x` upstream becomes a symbolic-function definition
+    # that rebinds the name Integer.
+    result = lower("0 = x\n")
+    assert result.python == "0 = x\n"
+
+
+def test_unbalanced_symbolic_assignment_stays_an_error() -> None:
+    # sage#17434: `f(x) = 1 ) + ( cos(x)` upstream silently produces
+    # valid Python.
+    result = lower("f(x) = 1 ) + ( cos(x)\n")
+    try:
+        compile(result.python, "<cell>", "exec")
+        raise AssertionError("invalid input compiled")
+    except SyntaxError as error:
+        assert error.lineno == 1
