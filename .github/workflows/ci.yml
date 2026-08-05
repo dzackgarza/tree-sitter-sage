@@ -31,11 +31,11 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Set up tree-sitter
-        uses: tree-sitter/setup-action/cli@v2
+        uses: tree-sitter/setup-action/cli@1868a545ffb91bdc221d14a168b5b6d8de4a28b3 # v2
       - name: Run tests
-        uses: tree-sitter/parser-test-action@v2
+        uses: tree-sitter/parser-test-action@aba4a3de737f86f8ce83be38166a1ab521d4c960 # v2
         with:
           test-rust: true
           test-node: true
@@ -49,7 +49,7 @@ jobs:
           git clone https://github.com/pallets/flask examples/flask --single-branch --depth=1 --filter=blob:none
           git clone https://github.com/python/cpython examples/cpython --single-branch --depth=1 --filter=blob:none
       - name: Parse examples
-        uses: tree-sitter/parse-action@v4
+        uses: tree-sitter/parse-action@f44ffa94f802024f27e821a72e6f2f3efc5dd521 # v4
         with:
           files: |
             examples/**/*.py
