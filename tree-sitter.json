@@ -15,7 +15,7 @@
     }
   ],
   "metadata": {
-    "version": "0.25.0",
+    "version": "0.1.0",
     "license": "MIT",
     "description": "Sage (SageMath) grammar for tree-sitter, a dialect fork of tree-sitter-sage",
     "authors": [

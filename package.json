@@ -1,6 +1,6 @@
 {
   "name": "tree-sitter-sage",
-  "version": "0.25.0",
+  "version": "0.1.0",
   "description": "Sage grammar for tree-sitter (dialect fork of tree-sitter-sage)",
   "repository": "https://github.com/tree-sitter/tree-sitter-sage",
   "license": "MIT",
