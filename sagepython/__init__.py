@@ -320,6 +320,28 @@ def _lower_operator_node(node: Node, context: _Context) -> str | None:
     return "".join(pieces)
 
 
+def _lower_factorial(node: Node, context: _Context) -> str:
+    argument = node.child_by_field_name("argument")
+    assert argument is not None
+    return f"factorial({_lower(argument, context)})"
+
+
+def _lower_matrix_literal(node: Node, context: _Context) -> str:
+    rows = ", ".join(
+        "["
+        + ", ".join(
+            _lower(element, context) for element in _named_elements(row)
+        )
+        + "]"
+        for row in node.children_by_field_name("row")
+    )
+    return f"matrix([{rows}])"
+
+
+def _lower_version_literal(node: Node, context: _Context) -> str:
+    return "(" + ", ".join(context.text(node).split(".")) + ")"
+
+
 def _lower_implicit_product(node: Node, context: _Context) -> str:
     left = node.child_by_field_name("left")
     right = node.child_by_field_name("right")
@@ -479,6 +501,9 @@ _LOWERINGS: dict[str, LoweringRule] = {
     "binary_operator": _lower_operator_node,
     "augmented_assignment": _lower_operator_node,
     "sage_implicit_product": _lower_implicit_product,
+    "sage_factorial": _lower_factorial,
+    "sage_matrix_literal": _lower_matrix_literal,
+    "sage_version_literal": _lower_version_literal,
     "sage_generator_assignment": _lower_generator_assignment,
     "sage_symbolic_function_assignment": _lower_symbolic_function,
     "sage_generator_access": _lower_generator_access,
@@ -572,4 +597,6 @@ RUNTIME_NAMES: tuple[str, ...] = (
     "ellipsis_iter",
     "var",
     "symbolic_expression",
+    "factorial",
+    "matrix",
 )

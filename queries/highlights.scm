@@ -160,3 +160,11 @@
   ".." @operator)
 
 ".<" @punctuation.bracket
+
+(sage_factorial
+  "!" @operator)
+
+(sage_version_literal) @number
+
+(sage_matrix_literal
+  ";" @punctuation.delimiter)

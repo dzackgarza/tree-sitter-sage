@@ -1,0 +1,62 @@
+================================================================================
+Version literals: three or more dotted components
+================================================================================
+
+v = 1.2.3
+w = 10.20.30.40
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_version_literal
+      (float)))
+  (assignment
+    (identifier)
+    (sage_version_literal
+      (float))))
+
+================================================================================
+Version literals: floats and generator access stay themselves
+================================================================================
+
+w = 1.2
+t = 2.5.sqrt()
+g = R.0
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (float))
+  (assignment
+    (identifier)
+    (call
+      (attribute
+        (float)
+        (identifier))
+      (argument_list)))
+  (assignment
+    (identifier)
+    (sage_generator_access
+      (identifier)
+      (sage_generator_index))))
+
+================================================================================
+Version literals: comparisons
+================================================================================
+
+ok = 4.1.1 < 4.10.0
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (comparison_operator
+      (sage_version_literal
+        (float))
+      (sage_version_literal
+        (float)))))

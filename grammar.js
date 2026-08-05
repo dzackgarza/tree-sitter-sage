@@ -37,13 +37,21 @@ const PREC = {
 const SEMICOLON = ';';
 
 const implicitMultiplication = require('./features/implicit_multiplication');
+const factorial = require('./features/factorial');
+const matrixLiterals = require('./features/matrix_literals');
+const versionLiterals = require('./features/version_literals');
 
 // Grammar feature modules: each is developed and corpus-tested in
 // isolation and composed into the build here.  `SAGE_FEATURES` selects
 // the set at generate time: unset or 'all' builds everything (the
 // shipped grammar); 'core' builds only Sage's default preparser
 // surface; a comma-separated list picks features by name.
-const FEATURE_MODULES = [implicitMultiplication];
+const FEATURE_MODULES = [
+  implicitMultiplication,
+  factorial,
+  matrixLiterals,
+  versionLiterals,
+];
 
 function enabledFeatures() {
   const setting = process.env.SAGE_FEATURES ?? 'all';
@@ -63,6 +71,11 @@ function composed(definition) {
     for (const [name, addition] of Object.entries(feature.extend ?? {})) {
       const base = definition.rules[name];
       definition.rules[name] = ($) => choice(addition($), base($));
+    }
+    if (feature.conflicts) {
+      const base = definition.conflicts;
+      const added = feature.conflicts;
+      definition.conflicts = ($) => [...base($), ...added($)];
     }
   }
   return definition;

@@ -3349,131 +3349,158 @@
       "members": [
         {
           "type": "SYMBOL",
-          "name": "sage_implicit_product"
+          "name": "sage_version_literal"
         },
         {
           "type": "CHOICE",
           "members": [
             {
               "type": "SYMBOL",
-              "name": "await"
+              "name": "sage_matrix_literal"
             },
             {
-              "type": "SYMBOL",
-              "name": "sage_generator_access"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "sage_raw_literal"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "sage_empty_subscript"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "binary_operator"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "identifier"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "keyword_identifier"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "string"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "concatenated_string"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "integer"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "float"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "true"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "false"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "none"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "unary_operator"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "attribute"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "subscript"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "call"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "list"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "list_comprehension"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "dictionary"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "dictionary_comprehension"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "set"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "set_comprehension"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "tuple"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "parenthesized_expression"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "generator_expression"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "ellipsis"
-            },
-            {
-              "type": "ALIAS",
-              "content": {
-                "type": "SYMBOL",
-                "name": "list_splat_pattern"
-              },
-              "named": true,
-              "value": "list_splat"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "sage_factorial"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "sage_implicit_product"
+                    },
+                    {
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "await"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "sage_generator_access"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "sage_raw_literal"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "sage_empty_subscript"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "binary_operator"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "identifier"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "keyword_identifier"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "string"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "concatenated_string"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "integer"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "float"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "true"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "false"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "none"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "unary_operator"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "attribute"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "subscript"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "call"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "list"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "list_comprehension"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "dictionary"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "dictionary_comprehension"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "set"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "set_comprehension"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "tuple"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "parenthesized_expression"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "generator_expression"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "ellipsis"
+                        },
+                        {
+                          "type": "ALIAS",
+                          "content": {
+                            "type": "SYMBOL",
+                            "name": "list_splat_pattern"
+                          },
+                          "named": true,
+                          "value": "list_splat"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -6713,6 +6740,116 @@
           ]
         }
       }
+    },
+    "sage_factorial": {
+      "type": "PREC_LEFT",
+      "value": 22,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "argument",
+            "content": {
+              "type": "SYMBOL",
+              "name": "primary_expression"
+            }
+          },
+          {
+            "type": "IMMEDIATE_TOKEN",
+            "content": {
+              "type": "STRING",
+              "value": "!"
+            }
+          }
+        ]
+      }
+    },
+    "sage_matrix_literal": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "["
+        },
+        {
+          "type": "FIELD",
+          "name": "row",
+          "content": {
+            "type": "SYMBOL",
+            "name": "sage_matrix_row"
+          }
+        },
+        {
+          "type": "REPEAT1",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ";"
+              },
+              {
+                "type": "FIELD",
+                "name": "row",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "sage_matrix_row"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "]"
+        }
+      ]
+    },
+    "sage_matrix_row": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "expression"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ","
+              },
+              {
+                "type": "SYMBOL",
+                "name": "expression"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "sage_version_literal": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "float"
+        },
+        {
+          "type": "IMMEDIATE_TOKEN",
+          "content": {
+            "type": "PREC",
+            "value": 1,
+            "content": {
+              "type": "PATTERN",
+              "value": "(\\.[0-9]+)+"
+            }
+          }
+        }
+      ]
     }
   },
   "extras": [
@@ -6769,6 +6906,10 @@
     [
       "sage_symbolic_function_assignment",
       "primary_expression"
+    ],
+    [
+      "sage_matrix_row",
+      "_collection_elements"
     ]
   ],
   "precedences": [],

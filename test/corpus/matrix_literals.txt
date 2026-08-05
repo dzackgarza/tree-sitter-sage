@@ -1,0 +1,71 @@
+================================================================================
+Matrix literals: rows split on semicolons
+================================================================================
+
+m = [1, 2; 3, 4]
+v = [1; 2]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_matrix_literal
+      (sage_matrix_row
+        (integer)
+        (integer))
+      (sage_matrix_row
+        (integer)
+        (integer))))
+  (assignment
+    (identifier)
+    (sage_matrix_literal
+      (sage_matrix_row
+        (integer))
+      (sage_matrix_row
+        (integer)))))
+
+================================================================================
+Matrix literals: plain lists and statement semicolons stay themselves
+================================================================================
+
+u = [1, 2]
+a = 1; b = 2
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (list
+      (integer)
+      (integer)))
+  (assignment
+    (identifier)
+    (integer))
+  (assignment
+    (identifier)
+    (integer)))
+
+================================================================================
+Matrix literals: expression entries
+================================================================================
+
+m = [x + 1, 0; 0, x^2]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_matrix_literal
+      (sage_matrix_row
+        (binary_operator
+          (identifier)
+          (integer))
+        (integer))
+      (sage_matrix_row
+        (integer)
+        (binary_operator
+          (identifier)
+          (integer))))))

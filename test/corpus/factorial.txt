@@ -1,0 +1,86 @@
+================================================================================
+Factorial: postfix bang
+================================================================================
+
+a = 5!
+b = n!
+c = (n + 1)!
+d = 5!!
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (sage_factorial
+      (integer)))
+  (assignment
+    (identifier)
+    (sage_factorial
+      (identifier)))
+  (assignment
+    (identifier)
+    (sage_factorial
+      (parenthesized_expression
+        (binary_operator
+          (identifier)
+          (integer)))))
+  (assignment
+    (identifier)
+    (sage_factorial
+      (sage_factorial
+        (integer)))))
+
+================================================================================
+Factorial: not-equal and f-string conversions stay themselves
+================================================================================
+
+a = 5!=3
+b = 5 != 3
+s = f"{x!r}"
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (comparison_operator
+      (integer)
+      (integer)))
+  (assignment
+    (identifier)
+    (comparison_operator
+      (integer)
+      (integer)))
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (interpolation
+        (identifier)
+        (type_conversion))
+      (string_end))))
+
+================================================================================
+Factorial: binds inside comparisons and arithmetic
+================================================================================
+
+a = 5! < 10
+b = 5! + 3!
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    (identifier)
+    (comparison_operator
+      (sage_factorial
+        (integer))
+      (integer)))
+  (assignment
+    (identifier)
+    (binary_operator
+      (sage_factorial
+        (integer))
+      (sage_factorial
+        (integer)))))
