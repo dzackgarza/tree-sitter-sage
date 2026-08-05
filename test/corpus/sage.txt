@@ -582,3 +582,19 @@ match command.split():
           (integer))
         (block
           (pass_statement))))))
+
+================================================================================
+Sage: generator names tolerate interior whitespace
+================================================================================
+
+R.< x , y > = QQ[]
+
+--------------------------------------------------------------------------------
+
+(module
+  (sage_generator_assignment
+    (identifier)
+    (identifier)
+    (identifier)
+    (sage_empty_subscript
+      (identifier))))
