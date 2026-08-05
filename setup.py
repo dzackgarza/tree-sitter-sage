@@ -45,8 +45,9 @@ class EggInfo(egg_info):
 
 
 setup(
-    packages=find_packages("bindings/python"),
-    package_dir={"": "bindings/python"},
+    packages=find_packages("bindings/python") + ["sagepython"],
+    package_dir={"": "bindings/python", "sagepython": "sagepython"},
+    install_requires=["tree-sitter"],
     package_data={
         "tree_sitter_sage": ["*.pyi", "py.typed"],
         "tree_sitter_sage.queries": ["*.scm"],
