@@ -66,7 +66,7 @@ def _segments(node: Node, context: _Context) -> list[Segment]:
     if node.type == "case_pattern" and not context.in_case_pattern:
         context = replace(context, in_case_pattern=True)
     rule = context.rules.get(node.type)
-    if rule is not None:
+    if rule is not None and not node.has_error:
         lowered = rule(node, context)
         if lowered is not None:
             return [
@@ -233,7 +233,7 @@ def _lower(node: Node, context: _Context) -> str:
     if node.type == "case_pattern" and not context.in_case_pattern:
         context = replace(context, in_case_pattern=True)
     rule = context.rules.get(node.type)
-    if rule is not None:
+    if rule is not None and not node.has_error:
         lowered = rule(node, context)
         if lowered is not None:
             return lowered
@@ -356,7 +356,12 @@ def _lower_generator_assignment(node: Node, context: _Context) -> str:
     name = node.child_by_field_name("name")
     right = node.child_by_field_name("right")
     assert name is not None and right is not None
-    generators = [context.text(child) for child in node.children_by_field_name("generator")]
+    # `...` becomes the literal name Ellipsis, exactly as stock Sage
+    # emits it; the consuming constructor expands the range at runtime.
+    generators = [
+        "Ellipsis" if context.text(child) == "..." else context.text(child)
+        for child in node.children_by_field_name("generator")
+    ]
     others = [context.text(child) for child in node.children_by_field_name("other_target")]
     constructor = _lower_constructor(right, generators, context)
     obj = context.text(name)

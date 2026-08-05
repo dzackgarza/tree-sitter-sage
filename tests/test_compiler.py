@@ -6,6 +6,8 @@ typed — and asserts byte-identical output and source maps against a
 fresh ``lower(source)``.
 """
 
+import pytest
+
 from sagepython import LoweredSource, lower
 
 
@@ -109,3 +111,34 @@ def test_unbalanced_symbolic_assignment_stays_an_error() -> None:
         raise AssertionError("invalid input compiled")
     except SyntaxError as error:
         assert error.lineno == 1
+
+
+def test_generator_ellipsis_lowers_to_the_literal_ellipsis_name() -> None:
+    # research#catalogue: `L.<a1, ..., a8>` keeps the middle slot as the
+    # literal name Ellipsis (exactly as stock Sage emits); the consuming
+    # constructor expands the range at runtime.  The compiler once
+    # silently dropped the slot, emitting a shorter, wrong name list.
+    result = lower("L.<a1, ..., a8> = IntegralLattice('E8')\n")
+    assert result.python == (
+        "L = IntegralLattice('E8', names=('a1', 'Ellipsis', 'a8',)); "
+        "(a1, Ellipsis, a8,) = L._first_ngens(3)\n"
+    )
+
+
+def test_generator_ellipsis_multiple_spans() -> None:
+    result = lower("M.<v1,v2,e1,...,e8,ep1,...,ep8> = Lattice(22)\n")
+    assert (
+        "names=('v1', 'v2', 'e1', 'Ellipsis', 'e8', 'ep1', 'Ellipsis', 'ep8',)"
+        in result.python
+    )
+    assert "(v1, v2, e1, Ellipsis, e8, ep1, Ellipsis, ep8,) = M._first_ngens(8)" in result.python
+
+
+def test_rules_never_fire_over_error_bearing_nodes() -> None:
+    # The silent-drop class: a construct with an internal parse error
+    # must never lower to shorter output — the broken text survives and
+    # CPython rejects it at its real position.
+    result = lower("L.<a, ?, b> = X(2)\n")
+    assert "a, ?, b" in result.python
+    with pytest.raises(SyntaxError):
+        compile(result.python, "<cell>", "exec")

@@ -846,7 +846,10 @@ module.exports = grammar(composed({
     sage_generator_assignment: $ => seq(
       field('name', $.identifier),
       '.<',
-      commaSep1(field('generator', $.identifier)),
+      // `...` is a generator slot: it lowers to the literal name
+      // Ellipsis (as stock Sage emits) and the consuming constructor
+      // expands the range at runtime.
+      commaSep1(field('generator', choice($.identifier, '...'))),
       '>',
       optional(seq(',', commaSep1(field('other_target', $.identifier)))),
       '=',

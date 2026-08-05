@@ -3620,8 +3620,17 @@
               "type": "FIELD",
               "name": "generator",
               "content": {
-                "type": "SYMBOL",
-                "name": "identifier"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "identifier"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "..."
+                  }
+                ]
               }
             },
             {
@@ -3637,8 +3646,17 @@
                     "type": "FIELD",
                     "name": "generator",
                     "content": {
-                      "type": "SYMBOL",
-                      "name": "identifier"
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "identifier"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "..."
+                        }
+                      ]
                     }
                   }
                 ]
