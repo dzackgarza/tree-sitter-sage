@@ -141,3 +141,6 @@ EXTENSION: dict[str, LoweringRule] = {
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
 }
+
+# Names the extension's lowerings emit into generated Python.
+RUNTIME_NAMES: tuple[str, ...] = ("Set", "ImageSet", "ConditionSet")

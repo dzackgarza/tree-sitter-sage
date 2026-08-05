@@ -547,3 +547,15 @@ splice = _splice
 named_elements = _named_elements
 has_ellipsis = _has_ellipsis
 ellipsis_arguments = _ellipsis_arguments
+
+# Names the core lowerings emit into generated Python; resolution-based
+# tools (pyflakes, jedi) must treat them as defined.
+RUNTIME_NAMES: tuple[str, ...] = (
+    "Integer",
+    "RealNumber",
+    "ComplexNumber",
+    "ellipsis_range",
+    "ellipsis_iter",
+    "var",
+    "symbolic_expression",
+)
