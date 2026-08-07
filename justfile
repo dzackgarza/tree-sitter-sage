@@ -35,11 +35,15 @@ test-push:
 test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 
-# The three live consumers hold copies, not links: the Sage venv and
-# the sage-lsp-server venv carry site-packages installs, and the
-# JupyterLab overlay (served develop-mode from the research tree)
-# fetches the committed wasm by name.
+# Refresh the live consumers.  The Python installs are editable, so their
+# finder maps `sagepython` straight at src/ and every compiler edit — new
+# modules included — is live in the next session with no reinstall.  The
+# compiled binding is not: `tree-sitter generate` rewrites src/parser.c,
+# and only rebuilding produces a matching _binding.abi3.so.  So this
+# recipe exists for the grammar, and running it after a pure compiler
+# change is harmless but unnecessary.  The JupyterLab overlay fetches the
+# committed wasm by name and needs the copy either way.
 refresh-local:
-    sage -pip install --quiet --force-reinstall --no-deps .
-    uv pip install -p ~/gitclones/sage-lsp-server/.venv --quiet --force-reinstall --no-deps .
+    sage -pip install --quiet --force-reinstall --no-deps -e .
+    uv pip install -p ~/gitclones/sage-lsp-server/.venv --quiet --force-reinstall --no-deps -e .
     cp tree-sitter-sage.wasm ~/research/jupyterlab-sage-syntax/static/static/tree-sitter-sage.wasm
