@@ -106,3 +106,29 @@ def test_version_literals_compare_lexicographically() -> None:
     namespace: dict = {}
     exec(result.python, namespace)
     assert namespace["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Brace ellipsis, and implicit multiplication as a setting
+# ---------------------------------------------------------------------------
+
+
+def test_brace_ellipsis_lowers_to_a_python_set() -> None:
+    # The grammar recognizes `{1..5}`, so the table has to lower it:
+    # splicing the children emitted `{Integer(1)..Integer(5)}`, which
+    # does not compile.
+    result = lower("s = {1..5}\n")
+    assert result.python == "s = set(ellipsis_range(Integer(1),Ellipsis,Integer(5)))\n"
+    compile(result.python, "<cell>", "exec")
+
+
+def test_brace_without_ellipsis_stays_a_set_literal() -> None:
+    assert lower("s = {1, 2}\n").python == "s = {Integer(1), Integer(2)}\n"
+
+
+def test_explicit_products_leave_juxtaposition_for_cpython_to_reject() -> None:
+    # Sage's own default is off.  Declining the rule keeps the author's
+    # text, so CPython reports the syntax error at the author's position
+    # instead of the compiler inventing a product.
+    assert lower("y = 2x\n", products="explicit").python == "y = 2x\n"
+    assert lower("y = 2x\n").python == "y = Integer(2)*x\n"

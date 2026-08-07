@@ -1,13 +1,21 @@
 r"""The SagePython compiler: tree-sitter-sage recognition and lowering.
 
-Sage-free by construction — importable in any Python environment.
-``lower(source, numbers="wrapped", previous=None, extensions=())``
+This module is the compiler core, and is Sage-free by construction —
+importable in any Python environment.  ``lower(source,
+numbers="wrapped", previous=None, extensions=(), products="implicit")``
 returns :class:`LoweredSource` (ordinary Python plus a
 :class:`SourceMap` translating positions in both directions), with
 incremental parse reuse via ``previous``.  The core lowers exactly the
 Sage language delta; dialect notation ships as opt-in extension rule
-tables (see :mod:`sagepython.research` for the set-builder notation).
-CPython compiles the output as the semantic authority.
+tables.  CPython compiles the output as the semantic authority.
+
+The replacement for Sage's preparser is :mod:`sagepython.preparser`,
+which installs itself over Sage's hooks when imported, and
+:mod:`sagepython.preparser.research`, which is that plus the research
+dialect.  Importing one of those is all a Sage session needs.  The split
+here is internal: the core and the rule tables carry no Sage import, so
+editors, linters, and language servers can lower source without a Sage
+installation.
 """
 
 from __future__ import annotations
@@ -26,6 +34,11 @@ from tree_sitter import Language, Node, Parser, Tree
 # "raw" leaves numeric literals as CPython sees them.
 Numbers = Literal["wrapped", "raw"]
 
+# Implicit multiplication: "implicit" reads `2x` as a product, "explicit"
+# leaves the juxtaposition alone so CPython rejects it as the syntax
+# error it is under Sage's default.
+Products = Literal["implicit", "explicit"]
+
 _LANGUAGE = Language(tree_sitter_sage.language())
 _PARSER = Parser(_LANGUAGE)
 
@@ -38,6 +51,7 @@ class _Context:
     source: bytes
     rules: Mapping[str, LoweringRule]
     numbers: Numbers = "wrapped"
+    products: Products = "implicit"
     in_case_pattern: bool = False
 
     def text(self, node: Node) -> str:
@@ -225,6 +239,7 @@ class LoweredSource:
     source_map: SourceMap
     _tree: Tree | None = dataclass_field(default=None, repr=False, compare=False)
     _numbers: Numbers = dataclass_field(default="wrapped", repr=False, compare=False)
+    _products: Products = dataclass_field(default="implicit", repr=False, compare=False)
 
 
 def _lower(node: Node, context: _Context) -> str:
@@ -341,6 +356,12 @@ def _lower_version_literal(node: Node, context: _Context) -> str:
 
 
 def _lower_implicit_product(node: Node, context: _Context) -> str:
+    # With implicit multiplication off, the juxtaposition is not a
+    # product: it is a syntax error, and the author's own text is what
+    # CPython should see and report.  Lowering the operands instead would
+    # hand CPython `Integer(2)x` and blame a construct nobody wrote.
+    if context.products == "explicit":
+        return context.text(node)
     left = node.child_by_field_name("left")
     right = node.child_by_field_name("right")
     assert left is not None and right is not None
@@ -355,7 +376,7 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
 _INDEXED_NAME = re.compile(r"([A-Za-z_]+)(\d+)([A-Za-z_]*)")
 
 
-def _expand_generator_ellipsis(slots: "list[str]") -> "list[str]":
+def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     r"""Expand ``['a1', '...', 'a8']`` through ``'a8'`` at compile time.
 
     The endpoints determine the range textually — indexed names share a
@@ -373,17 +394,13 @@ def _expand_generator_ellipsis(slots: "list[str]") -> "list[str]":
         left = _INDEXED_NAME.fullmatch(before)
         right = _INDEXED_NAME.fullmatch(after)
         if left and right:
-            assert left.group(1) == right.group(1) and left.group(3) == right.group(3), (
-                f"'...' between different stems: {before} and {after}"
-            )
+            assert left.group(1) == right.group(1) and left.group(3) == right.group(3), f"'...' between different stems: {before} and {after}"
             start, stop = int(left.group(2)), int(right.group(2))
             assert stop > start, f"'...' range does not ascend: {before}..{after}"
             stem, suffix = left.group(1), left.group(3)
             expanded.extend(f"{stem}{k}{suffix}" for k in range(start + 1, stop))
             continue
-        assert len(before) == 1 and len(after) == 1 and before < after, (
-            f"'...' needs indexed or single-letter endpoints: {before}, {after}"
-        )
+        assert len(before) == 1 and len(after) == 1 and before < after, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
         expanded.extend(chr(c) for c in range(ord(before) + 1, ord(after)))
     return expanded
 
@@ -392,9 +409,7 @@ def _lower_generator_assignment(node: Node, context: _Context) -> str:
     name = node.child_by_field_name("name")
     right = node.child_by_field_name("right")
     assert name is not None and right is not None
-    generators = _expand_generator_ellipsis(
-        [context.text(child) for child in node.children_by_field_name("generator")]
-    )
+    generators = _expand_generator_ellipsis([context.text(child) for child in node.children_by_field_name("generator")])
     others = [context.text(child) for child in node.children_by_field_name("other_target")]
     constructor = _lower_constructor(right, generators, context)
     obj = context.text(name)
@@ -496,6 +511,17 @@ def _lower_tuple(node: Node, context: _Context) -> str | None:
     return None
 
 
+def _lower_set(node: Node, context: _Context) -> str | None:
+    # The grammar recognizes `{1..5}`, so the table has to lower it:
+    # spliced children would emit `{Integer(1)..Integer(5)}`, which is
+    # not Python.  Dialects that give braces their own meaning replace
+    # this rule wholesale.
+    elements = _named_elements(node)
+    if _has_ellipsis(elements):
+        return f"set(ellipsis_range({_ellipsis_arguments(elements, context)}))"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # The lowering table and the preparser
 # ---------------------------------------------------------------------------
@@ -518,6 +544,7 @@ _LOWERINGS: dict[str, LoweringRule] = {
     "list": _lower_list,
     "parenthesized_expression": _lower_parenthesized,
     "tuple": _lower_tuple,
+    "set": _lower_set,
 }
 
 
@@ -531,6 +558,7 @@ def lower(
     numbers: Numbers = "wrapped",
     previous: LoweredSource | None = None,
     extensions: Sequence[Mapping[str, LoweringRule]] = (),
+    products: Products = "implicit",
 ) -> LoweredSource:
     r"""Compile SagePython source to ordinary Python plus a source map.
 
@@ -545,7 +573,7 @@ def lower(
     for extension in extensions:
         rules.update(extension)
     old_tree = None
-    if previous is not None and previous._tree is not None and previous._numbers == numbers:
+    if previous is not None and previous._tree is not None and previous._numbers == numbers and previous._products == products:
         old = previous.source_map.original.encode("utf-8")
         prefix = 0
         limit = min(len(old), len(encoded))
@@ -569,7 +597,7 @@ def lower(
         tree = _PARSER.parse(encoded, old_tree)
     else:
         tree = _PARSER.parse(encoded)
-    context = _Context(source=encoded, rules=rules, numbers=numbers)
+    context = _Context(source=encoded, rules=rules, numbers=numbers, products=products)
     segments = tuple(_segments(tree.root_node, context))
     python = "".join(segment.text for segment in segments)
     return LoweredSource(
@@ -577,6 +605,7 @@ def lower(
         source_map=SourceMap(original=source, python=python, segments=segments),
         _tree=tree,
         _numbers=numbers,
+        _products=products,
     )
 
 

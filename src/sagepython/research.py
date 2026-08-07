@@ -1,9 +1,13 @@
-r"""The research set-builder notation, as a compiler extension.
+r"""The research dialect's lowering rules.
+
+Sage-free like the compiler core, so the rules are testable without a
+Sage installation.  :mod:`sagepython.preparser.research` is the
+installable half: importing it applies this table and supplies
+``research_pow``, the one name here that needs Sage to decide anything.
 
 Brace notation is syntactically valid Python; CPython precedence gives
 every builder form a canonical tree shape, so no grammar is involved —
-these are lowering rules only, applied via
-``lower(source, extensions=(sagepython.research.EXTENSION,))``:
+these are lowering rules only:
 
 - ``{1, 2}`` → ``Set([1, 2])``; comprehensions likewise
 - ``{f(x) | x in D}`` / ``{f(x) | x in D and P}`` → ``ImageSet`` over
@@ -12,6 +16,10 @@ these are lowering rules only, applied via
   recovered from the comparison chain)
 - ``{1..5}`` → ``Set`` of an ``ellipsis_range``
 - dictionaries and dict comprehensions stay dictionaries
+
+``^`` is the second half: the dialect reads ``R^n`` as a free module
+over a ring, which is a call rather than an operator, so this module
+also owns the reassociation that a call makes necessary.
 """
 
 from __future__ import annotations
@@ -127,10 +135,66 @@ def _lower_set_comprehension(node: Node, context: Context) -> str:
     return f"Set([{inner[1:-1]}])"
 
 
+# ---------------------------------------------------------------------------
+# ``R^n``: the caret is research notation, ``**`` is Python's operator
+# ---------------------------------------------------------------------------
+
+
+def _is_caret(node: Node) -> bool:
+    operator = node.child_by_field_name("operator")
+    return node.type == "binary_operator" and operator is not None and operator.text == b"^"
+
+
+def _factors(node: Node, context: Context) -> list[str]:
+    r"""Return ``node`` as the list of factors of a product.
+
+    A list rather than one string because the caller may need only the
+    first or last factor: in ``x^2 y``, the exponent is ``2`` and ``y``
+    multiplies the result, so an outer caret has to be able to take them
+    apart.
+    """
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    if node.type == "sage_implicit_product" and left is not None and right is not None:
+        return _factors(left, context) + _factors(right, context)
+    if _is_caret(node) and left is not None and right is not None:
+        base = _factors(left, context)
+        exponent = _factors(right, context)
+        powered = f"research_pow({base[-1]}, {exponent[0]})"
+        return base[:-1] + [powered] + exponent[1:]
+    return [lower_node(node, context)]
+
+
+def _lower_caret(node: Node, context: Context) -> str | None:
+    r"""Lower ``a ^ b`` to the research power and ``a ^^ b`` to Python's xor.
+
+    ``^`` binds tighter than implicit multiplication — ``3x^2`` is
+    \(3x^2\), not \((3x)^2\), and ``x^2 y`` is \(x^2y\), not \(x^{2y}\) —
+    which the tree does not show: an implicit product is a single node,
+    so the caret's operand there is the whole product.  The core's
+    ``**`` substitution needs no such care, because Python re-parses the
+    result and supplies the precedence; a call fixes the grouping, so
+    the precedence has to be applied here.
+    """
+    operator = node.child_by_field_name("operator")
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    if operator is None or left is None or right is None:
+        return None
+    match operator.text:
+        case b"^":
+            return "*".join(_factors(node, context))
+        case b"^^":
+            return f"({lower_node(left, context)}) ^ ({lower_node(right, context)})"
+        case _:
+            return None
+
+
 EXTENSION: dict[str, LoweringRule] = {
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
+    "binary_operator": _lower_caret,
 }
 
 # Names the extension's lowerings emit into generated Python.
-RUNTIME_NAMES: tuple[str, ...] = ("Set", "ImageSet", "ConditionSet")
+RUNTIME_NAMES: tuple[str, ...] = ("Set", "ImageSet", "ConditionSet", "research_pow")
