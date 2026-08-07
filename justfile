@@ -19,7 +19,9 @@ default:
 # then the grammar's corpus/highlight suites, then central Python QC.
 test-commit:
     tree-sitter generate
-    if ! git diff --quiet -- src tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
+    # Name the generated artifacts, not all of `src`: the compiler sources
+    # under `src/sagepython` live there too, and `generate` never writes them.
+    if ! git diff --quiet -- src/parser.c src/grammar.json src/node-types.json tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
 

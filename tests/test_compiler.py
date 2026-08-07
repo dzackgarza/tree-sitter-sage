@@ -121,18 +121,12 @@ def test_generator_ellipsis_expands_at_compile_time() -> None:
     # compiler once even dropped the slot outright.)
     result = lower("L.<a1, ..., a8> = IntegralLattice('E8')\n")
     names = ", ".join(f"'a{i}'" for i in range(1, 9))
-    assert result.python == (
-        f"L = IntegralLattice('E8', names=({names},)); "
-        "(a1, a2, a3, a4, a5, a6, a7, a8,) = L._first_ngens(8)\n"
-    )
+    assert result.python == (f"L = IntegralLattice('E8', names=({names},)); (a1, a2, a3, a4, a5, a6, a7, a8,) = L._first_ngens(8)\n")
 
 
 def test_generator_ellipsis_multiple_spans_and_suffixes() -> None:
     result = lower("M.<v1,v2,e1,...,e4,ep1,...,ep4> = Lattice(10)\n")
-    assert (
-        "names=('v1', 'v2', 'e1', 'e2', 'e3', 'e4', 'ep1', 'ep2', 'ep3', 'ep4',)"
-        in result.python
-    )
+    assert "names=('v1', 'v2', 'e1', 'e2', 'e3', 'e4', 'ep1', 'ep2', 'ep3', 'ep4',)" in result.python
     assert "= M._first_ngens(10)" in result.python
 
 
