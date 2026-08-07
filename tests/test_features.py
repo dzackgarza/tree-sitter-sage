@@ -6,7 +6,7 @@ predate the features and must never change.  The feature tests state
 the new lowering contract.
 """
 
-from sagepython import lower
+from sageparse import lower
 
 # ---------------------------------------------------------------------------
 # Protections: base surface the features must not disturb

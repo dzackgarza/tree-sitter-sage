@@ -20,7 +20,7 @@ default:
 test-commit:
     tree-sitter generate
     # Name the generated artifacts, not all of `src`: the compiler sources
-    # under `src/sagepython` live there too, and `generate` never writes them.
+    # under `src/sageparse` live there too, and `generate` never writes them.
     if ! git diff --quiet -- src/parser.c src/grammar.json src/node-types.json tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
@@ -36,7 +36,7 @@ test-ci:
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
 
 # Refresh the live consumers.  The Python installs are editable, so their
-# finder maps `sagepython` straight at src/ and every compiler edit — new
+# finder maps `sageparse` straight at src/ and every compiler edit — new
 # modules included — is live in the next session with no reinstall.  The
 # compiled binding is not: `tree-sitter generate` rewrites src/parser.c,
 # and only rebuilding produces a matching _binding.abi3.so.  So this

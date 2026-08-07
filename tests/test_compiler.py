@@ -8,7 +8,7 @@ fresh ``lower(source)``.
 
 import pytest
 
-from sagepython import LoweredSource, lower
+from sageparse import LoweredSource, lower
 
 
 def _segment_tuples(result: LoweredSource) -> list[tuple[str, int, int, bool]]:

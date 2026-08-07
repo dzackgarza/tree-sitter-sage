@@ -1,21 +1,22 @@
 r"""The Sage preparser, complete and installed by import.
 
-``sagepython`` recognizes and lowers; this module is the replacement
+``sageparse`` recognizes and lowers; this module is the replacement
 itself — the entrypoints Sage calls, the frontend text protocols that
 surround them, and the installation over Sage's own hooks.  Importing
 the module installs it, so a session needs one line and no ceremony::
 
-    import sagepython.preparser            # the Sage dialect
-    import sagepython.preparser.research   # the same, plus research notation
+    import sageparse.preparser            # the Sage dialect
+    import sageparse.preparser.research   # the same, plus research notation
 
 ``time``, ``sage:``/``>>>`` prompts, ``...`` continuations, and
 ``load``/``attach`` are line protocols, not language: they are handled
 here as text, around the compiler.  Sage's ``_sage_const_`` hoisting was
 a loop optimization rather than parsing, so inline wrapping replaces it.
 
-Extensions register their rule tables with :func:`register_extension`;
-every later ``preparse`` applies them.  Only this module imports Sage —
-``sagepython`` itself stays importable in any Python environment.
+Extensions in :mod:`sageparse.extensions` register their rule tables
+with :func:`register_extension`; every later ``preparse`` applies them.
+Only this package imports Sage — the core and the rule tables stay
+importable in any Python environment.
 """
 
 from __future__ import annotations
@@ -28,8 +29,8 @@ from sage.repl import interpreter as sage_interpreter
 from sage.repl import preparse as sage_preparse
 from sage.repl.load import load_wrap
 
-from sagepython import RUNTIME_NAMES as _CORE_RUNTIME_NAMES
-from sagepython import LoweringRule, Products, lower
+from sageparse import RUNTIME_NAMES as _CORE_RUNTIME_NAMES
+from sageparse import LoweringRule, Products, lower
 
 _native_preparse = sage_preparse.preparse
 _native_preparse_file = sage_preparse.preparse_file

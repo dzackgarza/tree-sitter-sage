@@ -1,11 +1,11 @@
 """Behavioral proofs for the research-notation compiler extension.
 
-The rules import directly: ``sagepython.preparser.research`` is the
+The rules import directly: ``sageparse.preparser.research`` is the
 installable half and needs Sage, while the lowering it applies does not.
 """
 
-from sagepython import lower
-from sagepython.research import EXTENSION
+from sageparse import lower
+from sageparse.extensions.research import EXTENSION
 
 
 def _research(source: str) -> str:

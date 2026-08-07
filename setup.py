@@ -45,8 +45,13 @@ class EggInfo(egg_info):
 
 
 setup(
-    packages=find_packages("bindings/python") + ["sagepython", "sagepython.preparser"],
-    package_dir={"": "bindings/python", "sagepython": "src/sagepython", "sagepython.preparser": "src/sagepython/preparser"},
+    packages=find_packages("bindings/python") + ["sageparse", "sageparse.preparser", "sageparse.extensions"],
+    package_dir={
+        "": "bindings/python",
+        "sageparse": "src/sageparse",
+        "sageparse.preparser": "src/sageparse/preparser",
+        "sageparse.extensions": "src/sageparse/extensions",
+    },
     install_requires=["tree-sitter"],
     package_data={
         "tree_sitter_sage": ["*.pyi", "py.typed"],

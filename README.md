@@ -41,27 +41,29 @@ tree-sitter generate                           # everything (shipped)
 
 Each feature keeps its corpus tests in `test/corpus/<feature>.txt`; when testing a reduced build, exclude the absent features' tests with `tree-sitter test -e '<feature name>'`. The shipped artifacts (`src/`, bindings, WASM) are always the full composition.
 
-Lowering in `sagepython` is node-driven, so compiler behavior follows whatever the built grammar recognizes; semantics-only dialect notation (no new syntax) skips the grammar entirely and ships as compiler extension rule tables like `sagepython.research`.
+Lowering in `sageparse` is node-driven, so compiler behavior follows whatever the built grammar recognizes; semantics-only dialect notation (no new syntax) skips the grammar entirely and ships as compiler extension rule tables like `sageparse.extensions.research`.
 
-## The preparser
+## sageparse — the preparser
 
 This repo ships the complete replacement for Sage's preparser, not a component of one.
+Sage preparses with regular expressions over source text; `sageparse` parses, lowers from the tree, and lets CPython compile the result.
 A session installs it with one import and no other code:
 
 ```
-import sagepython.preparser            # the Sage dialect
-import sagepython.preparser.research   # the same, plus research notation
+import sageparse.preparser            # the Sage dialect
+import sageparse.preparser.research   # the same, plus research notation
 ```
 
 Importing installs `preparse`, `preparse_file`, and the `time`, `sage:`/`>>>`, `...`, and `load`/`attach` line protocols over `sage.repl.preparse` and `sage.repl.interpreter`.  `implicit_multiplication()` is a session setting, off by default as in Sage; with it off a juxtaposition reaches CPython as the author wrote it and fails there.
 
 Non-standard notation is optional and modular.
-Each dialect is a rule table plus the module that registers it — `sagepython.research` holds the set-builder rules, and `sagepython.preparser.research` installs them.
+Each extension is one rule table under `sageparse.extensions`, plus the module under `sageparse.preparser` that registers it into a live session.
+`sageparse.extensions.research` is the catch-all for non-standard notation migrated upstream out of research use; it currently holds the set-builder forms.
 
 The boundary is what a rule can decide from source text alone.
 `^` is exponentiation and lowers to `**`; what `R**n` then *means* is the ring's `__pow__`, so a session that wants `R^n` to build its own module overrides `__pow__` on that parent's class and needs nothing from the preparser.
 Lowering `^` to a function call instead would force this repo to reassociate around implicit products by hand, because the grammar's tree is not the precedence — `x^2 y` is one product node.
 Textual `**` avoids the whole problem: CPython re-parses and supplies the grouping.
 
-Three layers, three dependencies: the grammar recognizes, `sagepython` lowers with no Sage import at all, and `sagepython.preparser` is the only part that touches a Sage session.
+Three layers, three dependencies: the grammar recognizes, `sageparse` lowers with no Sage import at all, and `sageparse.preparser` is the only part that touches a Sage session.
 Editors and language servers use the middle layer without a Sage installation.

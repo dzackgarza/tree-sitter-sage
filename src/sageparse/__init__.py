@@ -1,21 +1,28 @@
-r"""The SagePython compiler: tree-sitter-sage recognition and lowering.
+r"""sageparse: Sage's preparser, rebuilt on a real grammar.
+
+Sage preparses with regular expressions over source text.  This package
+parses instead — tree-sitter-sage recognizes the construct, a lowering
+table rewrites it, and CPython compiles the output as the semantic
+authority.  Positions survive the rewrite, so a diagnostic about
+generated Python can be reported against the line the author wrote.
 
 This module is the compiler core, and is Sage-free by construction —
 importable in any Python environment.  ``lower(source,
 numbers="wrapped", previous=None, extensions=(), products="implicit")``
 returns :class:`LoweredSource` (ordinary Python plus a
 :class:`SourceMap` translating positions in both directions), with
-incremental parse reuse via ``previous``.  The core lowers exactly the
-Sage language delta; dialect notation ships as opt-in extension rule
-tables.  CPython compiles the output as the semantic authority.
+incremental parse reuse via ``previous``.
 
-The replacement for Sage's preparser is :mod:`sagepython.preparser`,
-which installs itself over Sage's hooks when imported, and
-:mod:`sagepython.preparser.research`, which is that plus the research
-dialect.  Importing one of those is all a Sage session needs.  The split
-here is internal: the core and the rule tables carry no Sage import, so
-editors, linters, and language servers can lower source without a Sage
-installation.
+The replacement itself is :mod:`sageparse.preparser`, which installs
+over Sage's hooks when imported.  Optional notation lives in
+:mod:`sageparse.extensions`, one rule table each, activated by the
+matching module under :mod:`sageparse.preparser`.  Importing one of
+those is all a Sage session needs.
+
+The split is internal, not a package boundary: the core and the rule
+tables carry no Sage import, so editors, linters, and language servers
+lower source without a Sage installation, while the package as a whole
+is still the complete replacement.
 """
 
 from __future__ import annotations
