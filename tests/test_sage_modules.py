@@ -1,0 +1,227 @@
+r"""``.sage`` as library source: the importer and the build backend.
+
+Both frontends bind the names the lowering emits to real Sage objects,
+so these need a Sage installation and are skipped without one.  Run them
+with ``sage -python -m pytest``; the grammar's own CI has no Sage and
+sees them skipped, which is why every claim about the compiler core
+lives in a Sage-free test module instead.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
+
+# `pytest.importorskip` is not usable here: this repo ships a `sage.so` --
+# the tree-sitter parser -- which shadows the name, so `import sage` fails
+# rather than being absent, and importorskip re-raises that.
+try:
+    from sage.rings.integer import Integer
+except Exception:
+    pytest.skip("no usable Sage in this interpreter", allow_module_level=True)
+
+# The parent type of a wrapped literal, asserted against below rather than
+# spelled twice.
+INTEGER = Integer.__name__
+
+PACKAGE = {
+    "__init__.sage": "VERSION = 2^3\n",
+    "algorithms.sage": textwrap.dedent(
+        """\
+        from sage.rings.rational_field import QQ
+
+
+        def ring():
+            R.<x, y> = QQ[]
+            return R
+
+
+        def span():
+            return [1,
+                    ..,
+                    5]
+
+
+        def boom():
+            raise ValueError("raised from Sage source")
+        """
+    ),
+}
+
+
+@pytest.fixture
+def tree(tmp_path: Path) -> Path:
+    package = tmp_path / "mypkg"
+    package.mkdir()
+    for name, body in PACKAGE.items():
+        (package / name).write_text(body)
+    return tmp_path
+
+
+def _run(cwd: Path, body: str) -> str:
+    result = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(body)],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+# ---------------------------------------------------------------------------
+# The importer
+# ---------------------------------------------------------------------------
+
+
+def test_a_sage_package_imports_like_any_other(tree: Path) -> None:
+    out = _run(
+        tree,
+        """
+        import sageparse.preparser.importer
+        import mypkg
+        from mypkg.algorithms import ring, span
+        print(mypkg.VERSION, type(mypkg.VERSION).__name__)
+        print(span())
+        print(ring())
+        """,
+    )
+    assert f"8 {INTEGER}" in out
+    assert "[1, 2, 3, 4, 5]" in out
+    assert "Multivariate Polynomial Ring in x, y over Rational Field" in out
+
+
+def test_module_identity_is_pythons(tree: Path) -> None:
+    # Sage's own load() executes into a namespace and produces no module;
+    # the point of a loader is that everything below is ordinary.
+    out = _run(
+        tree,
+        """
+        import importlib, sys
+        import sageparse.preparser.importer
+        import mypkg.algorithms as A
+        print(A.__spec__.name, A.__package__, A.__file__.endswith("algorithms.sage"))
+        print("mypkg.algorithms" in sys.modules)
+        print(importlib.reload(A) is A)
+        """,
+    )
+    assert "mypkg.algorithms mypkg True" in out
+    assert out.count("True") == 3
+
+
+def test_a_traceback_names_the_sage_file_and_line(tree: Path) -> None:
+    # The raise sits below a construct that lowers onto one line, so this
+    # fails if the padding ever stops holding the geometry.
+    source = (tree / "mypkg" / "algorithms.sage").read_text().splitlines()
+    expected_line = source.index('    raise ValueError("raised from Sage source")') + 1
+    out = _run(
+        tree,
+        """
+        import traceback
+        import sageparse.preparser.importer
+        from mypkg.algorithms import boom
+        try:
+            boom()
+        except ValueError:
+            frame = traceback.extract_tb(__import__("sys").exc_info()[2])[-1]
+            print(frame.filename.endswith("mypkg/algorithms.sage"), frame.lineno)
+        """,
+    )
+    assert out.strip() == f"True {expected_line}"
+
+
+def test_a_built_py_wins_over_its_sage_source(tree: Path) -> None:
+    (tree / "mypkg" / "other.sage").write_text("WHICH = 'sage'\n")
+    (tree / "mypkg" / "other.py").write_text("WHICH = 'py'\n")
+    out = _run(
+        tree,
+        """
+        import sageparse.preparser.importer
+        from mypkg.other import WHICH
+        print(WHICH)
+        """,
+    )
+    assert out.strip() == "py"
+
+
+def test_importing_the_compiler_alone_changes_no_import_semantics(tree: Path) -> None:
+    # `import mypkg` always succeeds — any directory is a namespace
+    # package — so the claim is about the module, not the directory:
+    # without the finder installed, nothing reaches the .sage source.
+    result = subprocess.run(
+        [sys.executable, "-c", "import sageparse; from mypkg.algorithms import ring"],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "ModuleNotFoundError" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# The build backend
+# ---------------------------------------------------------------------------
+
+
+def test_lower_tree_produces_importable_python(tree: Path, tmp_path: Path) -> None:
+    out = _run(
+        tree,
+        f"""
+        from pathlib import Path
+        import sageparse.preparser
+        from sageparse.build import lower_tree
+        written = lower_tree(Path("."), Path({str(tmp_path / "built")!r}))
+        print(sorted(p.name for p in written))
+        """,
+    )
+    assert "['__init__.py', 'algorithms.py']" in out
+
+    built = tmp_path / "built"
+    out = _run(
+        built,
+        """
+        import mypkg
+        from mypkg.algorithms import ring, span
+        print(mypkg.VERSION, span(), ring())
+        """,
+    )
+    assert "8 [1, 2, 3, 4, 5]" in out
+
+
+def test_a_built_module_needs_no_compiler(tree: Path, tmp_path: Path) -> None:
+    _run(
+        tree,
+        f"""
+        from pathlib import Path
+        import sageparse.preparser
+        from sageparse.build import lower_tree
+        lower_tree(Path("."), Path({str(tmp_path / "clean")!r}))
+        """,
+    )
+    generated = (tmp_path / "clean" / "mypkg" / "algorithms.py").read_text()
+    body = generated.split("\n", 1)[1]
+    assert "sageparse" not in body, "a built module must not depend on the compiler that made it"
+    assert "sage.all" not in body, "a library module gets the names it emits, not the interactive layer"
+
+
+def test_the_prelude_imports_only_the_names_used(tree: Path, tmp_path: Path) -> None:
+    _run(
+        tree,
+        f"""
+        from pathlib import Path
+        import sageparse.preparser
+        from sageparse.build import lower_tree
+        lower_tree(Path("."), Path({str(tmp_path / "narrow")!r}))
+        """,
+    )
+    generated = (tmp_path / "narrow" / "mypkg" / "algorithms.py").read_text()
+    assert "from sage.rings.integer import Integer" in generated
+    assert "from sage.arith.srange import ellipsis_range" in generated
+    for unused in ("matrix", "symbolic_expression", "factorial"):
+        assert f"import {unused}" not in generated, f"{unused} is never emitted by this module"

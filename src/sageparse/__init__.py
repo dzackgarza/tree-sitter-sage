@@ -422,7 +422,8 @@ def _lower_generator_assignment(node: Node, context: _Context) -> str:
     obj = context.text(name)
     targets = "".join(f", {other}" for other in others)
     gens = ", ".join(generators)
-    return f"{obj}{targets} = {constructor}; ({gens},) = {obj}._first_ngens({len(generators)})"
+    rebuilt = f"{obj}{targets} = {constructor}; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return _pad_to_source_lines(rebuilt, node, context)
 
 
 def _lower_constructor(right: Node, generators: list[str], context: _Context) -> str:
@@ -491,6 +492,23 @@ def _has_ellipsis(elements: list[Node]) -> bool:
     return any(element.type in {"sage_ellipsis_span", "sage_ellipsis"} for element in elements)
 
 
+def _pad_to_source_lines(rebuilt: str, node: Node, context: _Context) -> str:
+    r"""Give ``rebuilt`` the newline count of the span it replaces.
+
+    A rule that joins a multi-line construct onto one line shifts every
+    later line of the file, so a traceback, a coverage report, or a
+    breakpoint would name the wrong one.  These rewrites all end in a
+    closing bracket, where newlines are insignificant, so the lines can
+    simply be put back and the geometry holds without a second pass over
+    the tree.
+    """
+    missing = context.text(node).count("\n") - rebuilt.count("\n")
+    if missing <= 0:
+        return rebuilt
+    assert rebuilt.endswith(")"), f"cannot pad a rewrite that does not close a bracket: {rebuilt!r}"
+    return rebuilt[:-1] + "\n" * missing + ")"
+
+
 def _named_elements(node: Node) -> list[Node]:
     # Comments are named extras; splicing them into a joined single-line
     # rewrite would comment out everything after them.
@@ -500,21 +518,21 @@ def _named_elements(node: Node) -> list[Node]:
 def _lower_list(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_range({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_range({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
 def _lower_parenthesized(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
 def _lower_tuple(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
@@ -525,7 +543,7 @@ def _lower_set(node: Node, context: _Context) -> str | None:
     # this rule wholesale.
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"set(ellipsis_range({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"set(ellipsis_range({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
@@ -623,6 +641,7 @@ lower_node = _lower
 splice = _splice
 named_elements = _named_elements
 has_ellipsis = _has_ellipsis
+pad_to_source_lines = _pad_to_source_lines
 ellipsis_arguments = _ellipsis_arguments
 
 # Names the core lowerings emit into generated Python; resolution-based
