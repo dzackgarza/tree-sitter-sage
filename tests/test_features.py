@@ -132,3 +132,20 @@ def test_explicit_products_leave_juxtaposition_for_cpython_to_reject() -> None:
     # instead of the compiler inventing a product.
     assert lower("y = 2x\n", products="explicit").python == "y = 2x\n"
     assert lower("y = 2x\n").python == "y = Integer(2)*x\n"
+
+
+def test_caret_keeps_its_precedence_over_implicit_products() -> None:
+    # `^` lowers to `**` textually, so CPython re-parses and supplies the
+    # grouping.  The grammar's tree does not show it — an implicit product
+    # is one node — which is why lowering `^` to a call instead would have
+    # to reassociate by hand.  It does not, so nothing has to.
+    result = lower("v = 3x^2\n")
+    assert result.python == "v = Integer(3)*x**Integer(2)\n"
+    namespace = {"Integer": int, "x": 5}
+    exec(result.python, namespace)
+    assert namespace["v"] == 75  # 3*(5**2), not (3*5)**2 == 225
+
+    result = lower("w = x^2 y^3\n")
+    namespace = {"Integer": int, "x": 2, "y": 3}
+    exec(result.python, namespace)
+    assert namespace["w"] == 108  # (2**2)*(3**3), not 2**(2*3**3)
