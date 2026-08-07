@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 project(tree-sitter-sage
-        VERSION "0.4.7"
+        VERSION "0.5.0"
         DESCRIPTION "Python grammar for tree-sitter"
         HOMEPAGE_URL "https://github.com/tree-sitter/tree-sitter-sage"
         LANGUAGES C)
