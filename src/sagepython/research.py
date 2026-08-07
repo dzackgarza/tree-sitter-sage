@@ -2,8 +2,7 @@ r"""The research dialect's lowering rules.
 
 Sage-free like the compiler core, so the rules are testable without a
 Sage installation.  :mod:`sagepython.preparser.research` is the
-installable half: importing it applies this table and supplies
-``research_pow``, the one name here that needs Sage to decide anything.
+installable half: importing it applies this table to a Sage session.
 
 Brace notation is syntactically valid Python; CPython precedence gives
 every builder form a canonical tree shape, so no grammar is involved —
