@@ -15,7 +15,6 @@ is not worth running.
 from __future__ import annotations
 
 import pytest
-
 from sage.arith.srange import ellipsis_range
 
 from sageparse import expand_generator_ellipsis

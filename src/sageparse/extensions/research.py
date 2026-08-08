@@ -227,9 +227,10 @@ def _bound_names(node: Node) -> set[str]:
     stack = [root]
     while stack:
         current = stack.pop()
-        for field in _BINDING_FIELDS.get(current.type, ()):
-            for target in current.children_by_field_name(field):
-                _identifiers(target, names)
+        if current.type in _BINDING_FIELDS:
+            for field in _BINDING_FIELDS[current.type]:
+                for target in current.children_by_field_name(field):
+                    _identifiers(target, names)
         if current.type in _BINDING_NODES:
             _identifiers(current, names)
         stack.extend(current.children)
