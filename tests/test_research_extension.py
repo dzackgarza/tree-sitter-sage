@@ -89,6 +89,16 @@ def test_extension_builds_a_ring_from_names_nothing_binds() -> None:
     assert _research("R = ZZ['x','y']\n") == "R = ZZ['x','y']\n"
 
 
+def test_extension_reads_bindings_without_regard_to_scope() -> None:
+    # The scan is file-wide on purpose.  A name bound only inside a
+    # function body still suppresses the rule at module level, so a ring
+    # the dialect would otherwise build stays an ordinary subscript.
+    # Over-collecting can only make the rule decline, which is the safe
+    # direction; pinned here so it is a decision rather than a side
+    # effect of how the scan happens to walk.
+    assert _research("def f():\n    x = 1\n\nR = ZZ[x,y]\n") == "def f():\n    x = Integer(1)\n\nR = ZZ[x,y]\n"
+
+
 def test_extension_costs_a_subscript_whose_names_the_file_never_binds() -> None:
     # The price of the rule, pinned rather than hidden: a subscript by
     # genuinely unbound names becomes a ring even when indexing was

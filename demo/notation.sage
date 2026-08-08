@@ -3,7 +3,9 @@ r"""Sage notation this grammar recognizes, in a file Sage can run.
 Every construct below is one the preparser rewrites, so preparsing this
 file exercises the compiler against the interpreter it replaces: QC runs
 ``sage --preparse`` over it and byte-compiles the result, and the test
-suite executes it through the ``.sage`` importer and checks the numbers.
+suite runs it as the script it is and checks the numbers.  A script
+inherits ``sage.all_cmdline``; the ``.sage`` importer's module namespace
+is the other side of that split and is tested separately.
 
 Written in core notation only — the notation any Sage session gets from
 ``sageparse.preparser``.  The research dialect's additions live with

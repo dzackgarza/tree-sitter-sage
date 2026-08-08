@@ -257,3 +257,66 @@ def test_the_notation_demo_runs_and_computes() -> None:
     # `^` is exponentiation, so this is the exact Mersenne prime rather
     # than the 2 xor 127 a plain Python reading would produce.
     assert namespace["MERSENNE"] == 2**127 - 1
+
+
+def test_the_prelude_reads_references_not_prose(tmp_path: Path) -> None:
+    r"""A runtime name written in prose is not a dependency.
+
+    A built module is worth building because it needs the Sage libraries
+    it uses and nothing else.  A word search over the output cannot tell
+    ``matrix`` the call from ``matrix`` the noun, so a module that only
+    described matrices used to import the matrix constructor -- an
+    import that is unused, that ruff flags, and that makes the
+    dependency claim untrue.
+    """
+    source = tmp_path / "prose.sage"
+    source.write_text('"""Builds a matrix from a symbolic_expression, eventually."""\nSIZE = 2^3\n')
+    from sageparse.build import lower_file
+
+    generated = lower_file(source, tmp_path / "prose.py").read_text()
+
+    # The prelude precedes the module body, so it is everything before
+    # the docstring -- which is the one place the nouns legitimately are.
+    prelude = generated.split('"""')[0]
+    assert "from sage.rings.integer import Integer" in prelude, "2^3 emits Integer, so its import belongs"
+    assert "matrix" not in prelude, "the docstring's nouns are not references"
+    assert "symbolic_expression" not in prelude
+
+
+def test_every_emitted_name_is_bound_by_both_frontends() -> None:
+    r"""The two frontends must bind exactly what the compiler emits.
+
+    ``RUNTIME_NAMES`` is what the lowerings put into generated Python.
+    The importer binds them from ``NAMESPACE`` and a built module gets
+    them from ``IMPORTS``.  Nothing previously compared the three, so a
+    lowering that started emitting a tenth name would ship modules with
+    an undefined reference and no test would notice.
+    """
+    import sageparse.runtime
+    from sageparse import RUNTIME_NAMES
+    from sageparse.preparser import runtime_imports
+
+    assert set(RUNTIME_NAMES) == set(sageparse.runtime.NAMESPACE), "the importer binds what the core emits"
+    assert set(RUNTIME_NAMES) <= set(runtime_imports()), "a built module imports what the core emits"
+
+
+def test_the_literal_constructors_build_sage_numbers(tmp_path: Path) -> None:
+    r"""``RealNumber`` and ``ComplexNumber`` are constructors, not classes.
+
+    ``runtime.py`` binds both to ``create_*`` rather than to the classes
+    of the same name, because the lowering hands them a string and the
+    classes want a parent.  Getting that wrong is a ``TypeError`` at
+    module import, so it is worth exercising rather than asserting.
+    """
+    source = tmp_path / "numbers.sage"
+    source.write_text("REAL = 1.5\nIMAGINARY = 2j\n")
+    from sageparse.build import lower_file
+
+    generated = lower_file(source, tmp_path / "numbers.py").read_text()
+    namespace: dict = {}
+    exec(compile(generated, "<numbers>", "exec"), namespace)
+
+    # 1/2 and 3/2 are exact in binary, so an exact Sage real compares
+    # equal to them; the point is the type, not float tolerance.
+    assert namespace["REAL"] + namespace["REAL"] == 3
+    assert namespace["IMAGINARY"] ** 2 == -4

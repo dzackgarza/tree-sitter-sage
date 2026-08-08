@@ -27,7 +27,7 @@ development: work against ``.sage`` locations, ship the artifact.
 
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 
 from sageparse import lower
@@ -39,9 +39,18 @@ _HEADER = "# Generated from {source} by sageparse. Do not edit; edit the .sage s
 
 
 def _prelude(python: str) -> str:
-    """Import lines for exactly the runtime names this output mentions."""
-    used = [name for name, _ in sorted(runtime_imports().items()) if re.search(rf"\b{re.escape(name)}\b", python)]
-    return "".join(f"{runtime_imports()[name]}\n" for name in used)
+    """Import lines for exactly the runtime names this output references.
+
+    The names come off the parse tree, not out of the text.  A word
+    search cannot tell a reference from prose, so a module whose
+    docstring said "matrix" used to gain a Sage matrix dependency for
+    saying it -- which contradicts the whole reason to build ahead of
+    time.  ``ast`` already draws that line, and draws it in the same
+    place Python does.
+    """
+    referenced = {node.id for node in ast.walk(ast.parse(python)) if isinstance(node, ast.Name)}
+    imports = runtime_imports()
+    return "".join(f"{imports[name]}\n" for name in sorted(referenced & imports.keys()))
 
 
 def lower_source(source: str) -> str:
