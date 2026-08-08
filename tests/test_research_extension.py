@@ -70,11 +70,32 @@ def test_extension_leaves_a_ring_whose_subscript_is_not_its_generators() -> None
     assert _research("R.<x,y> = ZZ[a,b]\n") == "R = ZZ[a,b]; (x, y,) = R._first_ngens(2)\n"
 
 
-def test_extension_leaves_ordinary_two_index_subscripts_alone() -> None:
-    # A rule firing on subscript shape alone would turn matrix element
-    # access into a polynomial ring.  Nothing declares generators here.
-    assert _research("M = G[i,j]\n") == "M = G[i,j]\n"
-    assert _research("entry = A[row, column]\n") == "entry = A[row, column]\n"
+def test_extension_leaves_indexing_whose_names_the_file_binds() -> None:
+    # Matrix element access is the same shape as a polynomial ring, so a
+    # rule firing on shape alone would rewrite it.  What separates them
+    # is that real indexing uses names the file binds — loop targets,
+    # parameters, builtins.
+    assert _research("for i, j in P:\n    M = G[i,j]\n") == "for i, j in P:\n    M = G[i,j]\n"
+    assert _research("def f(row, column):\n    return A[row, column]\n") == "def f(row, column):\n    return A[row, column]\n"
+    assert _research("d: dict[str, int] = {}\n") == "d: dict[str, int] = {}\n"
+    assert _research("key = 1\nd = data[key]\n") == "key = Integer(1)\nd = data[key]\n"
+
+
+def test_extension_builds_a_ring_from_names_nothing_binds() -> None:
+    assert _research("R = ZZ[x,y]\n") == "R = ZZ['x, y']; (x, y,) = R._first_ngens(2)\n"
+    assert _research("R = ZZ[x0,...,x3]\n") == ("R = ZZ['x0, x1, x2, x3']; (x0, x1, x2, x3,) = R._first_ngens(4)\n")
+    # Already-quoted generators are not identifiers, so nothing fires and
+    # Sage's own reading stands.
+    assert _research("R = ZZ['x','y']\n") == "R = ZZ['x','y']\n"
+
+
+def test_extension_costs_a_subscript_whose_names_the_file_never_binds() -> None:
+    # The price of the rule, pinned rather than hidden: a subscript by
+    # genuinely unbound names becomes a ring even when indexing was
+    # meant.  Such code raises NameError today, so nothing that works
+    # changes meaning — but a notebook cell relying on names bound in an
+    # earlier cell is outside what the compiler can see.
+    assert _research("M = G[i,j]\n") == "M = G['i, j']; (i, j,) = M._first_ngens(2)\n"
 
 
 def test_multiline_set_with_interior_comments_lowers_compilably() -> None:

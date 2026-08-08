@@ -24,6 +24,8 @@ preparser one.
 
 from __future__ import annotations
 
+import builtins
+
 from sageparse import (
     Context,
     LoweringRule,
@@ -182,10 +184,100 @@ def _lower_generator_assignment(node: Node, context: Context) -> str:
     return pad_to_source_lines(rebuilt, node, context)
 
 
+# Subtrees whose identifiers name something the file binds.  Reading a
+# whole node rather than its precise target over-collects — `G[i] = 1`
+# marks `G` and `i` bound, `import a.b` marks `a` and `b` — and that is
+# the safe direction: an over-collected name only keeps the ring rule
+# from firing, while a missed one would rewrite working code.
+_BINDING_FIELDS = {
+    "assignment": ("left",),
+    "augmented_assignment": ("left",),
+    "for_statement": ("left",),
+    "for_in_clause": ("left",),
+    "function_definition": ("name", "parameters"),
+    "lambda": ("parameters",),
+    "class_definition": ("name",),
+    "named_expression": ("name",),
+    "sage_generator_assignment": ("name", "generator", "other_target"),
+}
+_BINDING_NODES = frozenset(
+    {
+        "import_statement",
+        "import_from_statement",
+        "as_pattern_target",
+        "global_statement",
+        "nonlocal_statement",
+    }
+)
+
+
+def _identifiers(node: Node, into: set[str]) -> None:
+    if node.type == "identifier" and node.text is not None:
+        into.add(node.text.decode())
+    for child in node.children:
+        _identifiers(child, into)
+
+
+def _bound_names(node: Node) -> set[str]:
+    """Every name the file containing ``node`` binds, plus the builtins."""
+    root = node
+    while root.parent is not None:
+        root = root.parent
+    names = set(dir(builtins))
+    stack = [root]
+    while stack:
+        current = stack.pop()
+        for field in _BINDING_FIELDS.get(current.type, ()):
+            for target in current.children_by_field_name(field):
+                _identifiers(target, names)
+        if current.type in _BINDING_NODES:
+            _identifiers(current, names)
+        stack.extend(current.children)
+    return names
+
+
+def _lower_assignment(node: Node, context: Context) -> str | None:
+    r"""Lower ``R = ZZ[x,y]`` when nothing in the file binds ``x`` or ``y``.
+
+    ``ZZ[x, y]`` is how the ring is written, and Sage already builds it
+    from symbolic variables or generators — the one case it cannot serve
+    is names that do not exist yet, where it raises ``NameError``.  This
+    binds them instead, exactly as ``R.<x,y> = ZZ[x,y]`` does.
+
+    Unboundness is what separates a ring from a subscript: ``G[i, j]``
+    and ``dict[str, Any]`` are the same shape, and both name things the
+    file binds — loop targets, imports, builtins.  A name bound nowhere
+    can only be a ``NameError`` today, so no working code changes
+    meaning.  The limit is that the file is all the compiler sees: in a
+    notebook, names bound in an earlier cell look unbound here, and
+    ``M = G[i, j]`` in a fresh cell would become a ring.  Declare the
+    generators with ``R.<i,j> = ...`` in that situation, or index with an
+    explicit tuple.
+    """
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    if left is None or right is None or left.type != "identifier" or right.type != "subscript":
+        return None
+    generators = _subscript_names(right, context)
+    if generators is None:
+        return None
+    bound = _bound_names(node)
+    if any(generator in bound for generator in generators):
+        return None
+    value = right.child_by_field_name("value")
+    assert value is not None
+    obj = context.text(left)
+    quoted = "'" + ", ".join(generators) + "'"
+    gens = ", ".join(generators)
+    rebuilt = f"{obj} = {lower_node(value, context)}[{quoted}]; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return pad_to_source_lines(rebuilt, node, context)
+
+
 EXTENSION: dict[str, LoweringRule] = {
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
     "sage_generator_assignment": _lower_generator_assignment,
+    "assignment": _lower_assignment,
 }
 
 # Names the extension's lowerings emit into generated Python.
