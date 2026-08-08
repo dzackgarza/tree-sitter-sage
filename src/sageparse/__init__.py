@@ -383,17 +383,18 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
 _INDEXED_NAME = re.compile(r"([A-Za-z_]+)(\d+)([A-Za-z_]*)")
 
 
-def _span_step(start: int, previous: int | None) -> int:
-    """Distance between successive names, from the two before the span."""
-    return start - previous if previous is not None else 1
+def _span(start: int, then: int | None, stop: int) -> range:
+    """The whole span ``start, then, .., stop`` as indices.
 
-
-def _span_range(start: int, stop: int, step: int, span: str) -> range:
-    """The interior of a span, or an assertion naming why it has none."""
-    assert step != 0, f"'...' repeats a name: {span}"
-    assert (stop - start) % step == 0, f"'...' step {step} does not reach the end of {span}"
-    assert (stop - start) // step > 0, f"'...' range does not ascend: {span}"
-    return range(start + step, stop, step)
+    This is Haskell's ``[a,b..c]`` and Sage's own ``ellipsis_range``,
+    which agree on every case and which ``range`` already implements:
+    the step is ``b - a``, the endpoint is inclusive, a step that
+    overshoots truncates (``[0,3..10]`` is ``0,3,6,9``), a backwards
+    span is empty, and a zero step raises.  Reproducing those decisions
+    by hand only invents a fourth dialect of an answered question.
+    """
+    step = then - start if then is not None else 1
+    return range(start, stop + (1 if step > 0 else -1), step)
 
 
 def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
@@ -409,31 +410,47 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     generators, not eleven.  Only a name sharing the endpoints' stem
     counts, so the ``e1`` of ``v1, v2, e1, ..., e4`` starts a fresh span
     at step one rather than inheriting a step from ``v2``.
+
+    A span owns its endpoints, because it may not reach the right one:
+    ``x0, x3, ..., x10`` stops at ``x9``.  Both names are taken back out
+    of the expansion and the whole sequence written in their place.
     """
     expanded: list[str] = []
-    for i, slot in enumerate(slots):
+    index = 0
+    while index < len(slots):
+        slot = slots[index]
         if slot != "...":
             expanded.append(slot)
+            index += 1
             continue
-        assert 0 < i < len(slots) - 1, "'...' needs a name on each side"
-        before, after = expanded[-1], slots[i + 1]
-        span = f"{before}, ..., {after}"
-        previous = expanded[-2] if len(expanded) > 1 else None
+        assert 0 < index < len(slots) - 1, "'...' needs a name on each side"
+        before, after = expanded.pop(), slots[index + 1]
+        previous = expanded[-1] if expanded else None
         left = _INDEXED_NAME.fullmatch(before)
         right = _INDEXED_NAME.fullmatch(after)
         if left and right:
             assert left.group(1) == right.group(1) and left.group(3) == right.group(3), f"'...' between different stems: {before} and {after}"
             stem, suffix = left.group(1), left.group(3)
             prior = _INDEXED_NAME.fullmatch(previous) if previous else None
-            same_stem = prior is not None and prior.group(1) == stem and prior.group(3) == suffix
-            step = _span_step(int(left.group(2)), int(prior.group(2)) if same_stem and prior else None)
-            interior = _span_range(int(left.group(2)), int(right.group(2)), step, span)
-            expanded.extend(f"{stem}{k}{suffix}" for k in interior)
-            continue
-        assert len(before) == 1 and len(after) == 1, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
-        adjacent = ord(previous) if previous is not None and len(previous) == 1 else None
-        step = _span_step(ord(before), adjacent)
-        expanded.extend(chr(c) for c in _span_range(ord(before), ord(after), step, span))
+            steps_from = prior is not None and prior.group(1) == stem and prior.group(3) == suffix
+            start = int(prior.group(2)) if steps_from and prior else int(left.group(2))
+            then = int(left.group(2)) if steps_from else None
+            names = [f"{stem}{k}{suffix}" for k in _span(start, then, int(right.group(2)))]
+        else:
+            assert len(before) == 1 and len(after) == 1, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
+            steps_from = previous is not None and len(previous) == 1
+            start = ord(previous) if steps_from and previous else ord(before)
+            then = ord(before) if steps_from else None
+            names = [chr(c) for c in _span(start, then, ord(after))]
+        # An empty span is a legal list of numbers but not a legal
+        # declaration: `L.<a8, ..., a1>` would emit `(,) = L._first_ngens(0)`,
+        # which is a SyntaxError.  The span semantics stay Sage's; naming
+        # nothing is refused here, where the names become a declaration.
+        assert names, f"'...' span names no generator: {before}, ..., {after}"
+        if steps_from:
+            expanded.pop()
+        expanded.extend(names)
+        index += 2
     return expanded
 
 

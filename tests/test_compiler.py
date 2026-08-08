@@ -170,8 +170,21 @@ def test_generator_ellipsis_step_applies_to_letter_ranges() -> None:
     assert "names=('a', 'c', 'e', 'g', 'i',)" in result.python
 
 
-def test_generator_ellipsis_rejects_a_span_the_step_does_not_reach() -> None:
-    # `x0, x3, ..., x10` steps past the endpoint; failing at preparse
-    # beats declaring a ring the notation does not describe.
+def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
+    # Haskell's `[a,b..c]` and Sage's own `ellipsis_range` agree on every
+    # span, and `range` implements both.  These expectations are theirs,
+    # not this compiler's: a step that overshoots truncates rather than
+    # failing, a span that cannot ascend is empty, and a repeated name
+    # is a zero step.  Reproducing them by hand invented a fourth
+    # dialect, which is what these rows exist to prevent.
+    #   ellipsis_range(0, 3, Ellipsis, 10) == [0, 3, 6, 9]
+    assert "names=('x0', 'x3', 'x6', 'x9',)" in lower("R.<x0, x3, ..., x10> = Lattice(4)\n").python
+    #   ellipsis_range(5, Ellipsis, 5) == [5]
+    assert "names=('x5',)" in lower("R.<x5, ..., x5> = Lattice(1)\n").python
+    #   ellipsis_range(10, Ellipsis, 0) == [] — legal as numbers, but a
+    #   declaration naming nothing would emit `(,) = R._first_ngens(0)`.
     with pytest.raises(AssertionError):
-        lower("R.<x0, x3, ..., x10> = ZZ[]\n")
+        lower("R.<x10, ..., x0> = Lattice(0)\n")
+    #   ellipsis_range(0, 0, Ellipsis, 10) raises — a step of zero
+    with pytest.raises(ValueError):
+        lower("R.<x0, x0, ..., x10> = Lattice(2)\n")
