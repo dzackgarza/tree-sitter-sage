@@ -29,7 +29,34 @@ test-commit:
 test-push:
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
+    @just test-sage
     @just refresh-local
+
+# The suite again, under Sage's own interpreter.
+#
+# Central QC runs pytest through `uvx`, an ephemeral environment with no
+# Sage in it by construction, so every test asserting that lowered output
+# builds a real Sage object skips there and the gate goes green without
+# having checked the one thing this package exists to do.  That run still
+# earns its place — it is what proves the core imports and lowers without
+# Sage, which editors and language servers depend on — but it cannot be
+# the only run.  This one has Sage, so nothing skips.
+#
+# Sage is a hard dependency of this gate.  A missing SAGE_BIN is a broken
+# setup and fails here rather than silently reducing what is proved.
+test-sage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${SAGE_BIN:-}" ] || [ ! -x "${SAGE_BIN:-}" ]; then
+        echo "ERROR: SAGE_BIN is unset or not executable (current: '${SAGE_BIN:-<unset>}')." >&2
+        echo "       This repo is Sage's preparser; its tests do not mean anything without Sage." >&2
+        echo "       FIX: export SAGE_BIN=\"\$(command -v sage)\"" >&2
+        exit 1
+    fi
+    echo "============================="
+    echo "=== Running: pytest under Sage ($SAGE_BIN) ==="
+    echo "# Proves lowered output builds real Sage objects; nothing skips here."
+    "$SAGE_BIN" --python -m pytest tests/ -q --no-header -p no:cacheprovider
 
 # Run CI acceptance QC through the central implementation.
 test-ci:
