@@ -4,7 +4,9 @@ Both frontends bind the names the lowering emits to real Sage objects,
 so these need Sage, like the rest of the suite.  Sage is a hard
 dependency of a Sage preparser: a missing one is a broken setup and
 fails loudly here rather than quietly proving less.  QC runs the suite
-through ``sage.all`` for this reason; see the ``_sage-pytest`` recipe.
+in a Sage session for this reason, and
+``test_the_suite_runs_in_a_sage_session`` below checks that here rather
+than trusting the ``_sage-pytest`` recipe to keep doing it.
 
 The core's Sage-free claim is not established by these tests being
 optional — it is checked on the import graph, in
@@ -320,3 +322,17 @@ def test_the_literal_constructors_build_sage_numbers(tmp_path: Path) -> None:
     # equal to them; the point is the type, not float tolerance.
     assert namespace["REAL"] + namespace["REAL"] == 3
     assert namespace["IMAGINARY"] ** 2 == -4
+
+
+def test_the_suite_runs_in_a_sage_session() -> None:
+    r"""The interpreter running these tests must have started Sage.
+
+    `sage -python` makes `sage` importable; it is not a Sage session,
+    and `sage.all` is absent from it.  Every way a person runs Sage code
+    performs that startup import, and Sage's own library is written
+    expecting it, so a suite run without it tests an environment no user
+    has.  The docstring at the top of this file claims QC provides one;
+    this is what makes the claim checkable here instead of true only in
+    another repository's recipe.
+    """
+    assert "sage.all" in sys.modules, "the suite is running under sage -python, not in a Sage session"
