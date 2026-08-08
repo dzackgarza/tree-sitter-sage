@@ -225,3 +225,38 @@ def test_the_prelude_imports_only_the_names_used(tree: Path, tmp_path: Path) -> 
     assert "from sage.arith.srange import ellipsis_range" in generated
     for unused in ("matrix", "symbolic_expression", "factorial"):
         assert f"import {unused}" not in generated, f"{unused} is never emitted by this module"
+
+
+def test_the_notation_demo_runs_and_computes() -> None:
+    r"""`demo/notation.sage` is executable Sage, not a syntax display.
+
+    QC preparses it and byte-compiles the result, which proves the
+    compiler emits Python — not that the Python means anything.  This
+    runs it, as the script it is: `sage-preparse` emits its header line
+    and then `preparse_file`'s output, so a script gets the whole
+    `sage.all_cmdline` namespace.  That is the other half of the split
+    `sageparse.runtime` documents — a module states its own imports, a
+    script inherits the interactive layer — and the demo is on the
+    script side.
+
+    Values are checked against arithmetic known independently of Sage:
+    2^127-1 is a Mersenne prime, 10! is 3628800, and [0,-1; 1,0] is the
+    quarter-turn, so it has order 4.
+    """
+    from sageparse.preparser import preparse_file
+
+    source = (Path(__file__).resolve().parent.parent / "demo" / "notation.sage").read_text()
+    script = "from sage.all_cmdline import *\n" + preparse_file(source)
+    namespace: dict = {}
+    exec(compile(script, "<demo>", "exec"), namespace)
+
+    computed = namespace["demonstrate"]()
+    assert computed["mersenne_is_prime"] is True
+    assert computed["arrangements"] == 3628800
+    assert computed["conic_factors"] is True
+    assert computed["generators"] == 5
+    assert computed["squares"] == [n * n for n in range(1, 11)]
+    assert computed["rotation_order"] == 4
+    # `^` is exponentiation, so this is the exact Mersenne prime rather
+    # than the 2 xor 127 a plain Python reading would produce.
+    assert namespace["MERSENNE"] == 2**127 - 1

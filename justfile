@@ -4,7 +4,7 @@
 
 # ai-review-ci contract variables consumed by doctor and workflow installers.
 ai_review_ci_schema_version := "1"
-ai_review_ci_profile := "python"
+ai_review_ci_profile := "sage"
 ai_review_ci_ref := "main"
 ai_review_ci_release_channel := "main"
 ai_review_ci_workflow_template_version := "1"
@@ -23,44 +23,34 @@ test-commit:
     # under `src/sageparse` live there too, and `generate` never writes them.
     if ! git diff --quiet -- src/parser.c src/grammar.json src/node-types.json tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
     tree-sitter test
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
 
 # Push-tier QC, then refresh every local installation consuming this grammar.
 test-push:
     tree-sitter test
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
-    @just test-sage
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
+    @just test-without-sage
     @just refresh-local
 
-# The suite again, under Sage's own interpreter.
+# The suite again, in an interpreter with no Sage in it.
 #
-# Central QC runs pytest through `uvx`, an ephemeral environment with no
-# Sage in it by construction, so every test asserting that lowered output
-# builds a real Sage object skips there and the gate goes green without
-# having checked the one thing this package exists to do.  That run still
-# earns its place — it is what proves the core imports and lowers without
-# Sage, which editors and language servers depend on — but it cannot be
-# the only run.  This one has Sage, so nothing skips.
+# The Sage profile runs pytest under Sage, which is what makes the
+# runtime claims provable.  This repo also claims the opposite: the
+# compiler core and the rule tables carry no Sage import, so an editor or
+# language server can lower a file without a Sage installation.  Nothing
+# in the profile checks that, and it is not a claim about the tests — it
+# is a claim about the package, and it holds only as long as no core
+# module grows a Sage import.
 #
-# Sage is a hard dependency of this gate.  A missing SAGE_BIN is a broken
-# setup and fails here rather than silently reducing what is proved.
-test-sage:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "${SAGE_BIN:-}" ] || [ ! -x "${SAGE_BIN:-}" ]; then
-        echo "ERROR: SAGE_BIN is unset or not executable (current: '${SAGE_BIN:-<unset>}')." >&2
-        echo "       This repo is Sage's preparser; its tests do not mean anything without Sage." >&2
-        echo "       FIX: export SAGE_BIN=\"\$(command -v sage)\"" >&2
-        exit 1
-    fi
-    echo "============================="
-    echo "=== Running: pytest under Sage ($SAGE_BIN) ==="
-    echo "# Proves lowered output builds real Sage objects; nothing skips here."
-    "$SAGE_BIN" --python -m pytest tests/ -q --no-header -p no:cacheprovider
+# Central QC's pytest recipe runs in an ephemeral `uvx` environment,
+# which is exactly the interpreter that claim describes.  The Sage-only
+# modules skip here by design; that is the point of running it twice.
+test-without-sage:
+    @just -f ~/ai-review-ci/justfiles/python.just -d . _pytest
 
 # Run CI acceptance QC through the central implementation.
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
 
 # Refresh the live consumers.  The Python installs are editable, so their
 # finder maps `sageparse` straight at src/ and every compiler edit — new
