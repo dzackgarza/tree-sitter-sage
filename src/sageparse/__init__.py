@@ -387,11 +387,18 @@ def _span(start: int, then: int | None, stop: int) -> range:
     """The whole span ``start, then, .., stop`` as indices.
 
     This is Haskell's ``[a,b..c]`` and Sage's own ``ellipsis_range``,
-    which agree on every case and which ``range`` already implements:
-    the step is ``b - a``, the endpoint is inclusive, a step that
-    overshoots truncates (``[0,3..10]`` is ``0,3,6,9``), a backwards
-    span is empty, and a zero step raises.  Reproducing those decisions
-    by hand only invents a fourth dialect of an answered question.
+    which ``range`` already implements: the step is ``b - a``, the
+    endpoint is inclusive, a step that overshoots truncates
+    (``[0,3..10]`` is ``0,3,6,9``), and a backwards span is empty.
+    Reproducing those decisions by hand only invents a third dialect of
+    an answered question.
+
+    The two references part on one case, checked against ``ghc`` and a
+    live ``ellipsis_range``: a zero step makes ``[0,0..10]`` an infinite
+    list of zeros in Haskell, while ``ellipsis_range`` and ``range``
+    both raise.  Raising wins here — a ring cannot have infinitely many
+    generators all named ``x0`` — and it is Sage that this preparser
+    has to agree with.
     """
     step = then - start if then is not None else 1
     return range(start, stop + (1 if step > 0 else -1), step)

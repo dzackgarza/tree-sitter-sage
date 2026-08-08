@@ -171,20 +171,29 @@ def test_generator_ellipsis_step_applies_to_letter_ranges() -> None:
 
 
 def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
-    # Haskell's `[a,b..c]` and Sage's own `ellipsis_range` agree on every
-    # span, and `range` implements both.  These expectations are theirs,
-    # not this compiler's: a step that overshoots truncates rather than
-    # failing, a span that cannot ascend is empty, and a repeated name
-    # is a zero step.  Reproducing them by hand invented a fourth
+    # These expectations belong to Haskell's `[a,b..c]` and Sage's own
+    # `ellipsis_range`, not to this compiler.  Each row carries the two
+    # calls that produced it, run against `ghc` and a live Sage: a step
+    # that overshoots truncates rather than failing, and a span that
+    # cannot ascend is empty.  Reproducing them by hand invented a third
     # dialect, which is what these rows exist to prevent.
+    #   [0,3..10]                          == [0, 3, 6, 9]
     #   ellipsis_range(0, 3, Ellipsis, 10) == [0, 3, 6, 9]
     assert "names=('x0', 'x3', 'x6', 'x9',)" in lower("R.<x0, x3, ..., x10> = Lattice(4)\n").python
+    #   [5..5]                        == [5]
     #   ellipsis_range(5, Ellipsis, 5) == [5]
     assert "names=('x5',)" in lower("R.<x5, ..., x5> = Lattice(1)\n").python
+    #   ['a','c'..'i']                == "acegi"
+    assert "names=('a', 'c', 'e', 'g', 'i',)" in lower("L.<a, c, ..., i> = Lattice(5)\n").python
+    #   [10..0]                        == []
     #   ellipsis_range(10, Ellipsis, 0) == [] — legal as numbers, but a
     #   declaration naming nothing would emit `(,) = R._first_ngens(0)`.
+    #   (ghc warns on this span too, under -Wempty-enumerations.)
     with pytest.raises(AssertionError):
         lower("R.<x10, ..., x0> = Lattice(0)\n")
-    #   ellipsis_range(0, 0, Ellipsis, 10) raises — a step of zero
+    # The one case the references disagree on. `[0,0..10]` is an
+    # infinite list of zeros in Haskell; `ellipsis_range(0, 0, ..., 10)`
+    # and `range` both raise. Sage wins — a ring cannot have infinitely
+    # many generators all named x0.
     with pytest.raises(ValueError):
         lower("R.<x0, x0, ..., x10> = Lattice(2)\n")
