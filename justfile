@@ -35,6 +35,23 @@ test-push:
 test-ci:
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
 
+# Put a Sage on a bare runner, for the QC workflow's setup_recipe hook.
+#
+# Sage ships no wheel, so this is a package install rather than a pip one,
+# and it is slow. That is fine: CI time is not wall-clock anyone waits on,
+# and the alternative -- gating a Sage preparser on something that is not
+# Sage -- is how this repo already got a suite that passed against
+# `sage -python`, an interpreter with no sage.all in it.
+ci-provision-sage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo apt-get update
+    sudo apt-get install -y --no-install-recommends sagemath
+    sage_bin="$(command -v sage)"
+    "$sage_bin" --python -m pip install --quiet pytest
+    echo "SAGE_BIN=$sage_bin" >> "${GITHUB_ENV:-/dev/stdout}"
+    "$sage_bin" -c "import sys; print('sage', sys.version)"
+
 # Refresh the live consumers.  The Python installs are editable, so their
 # finder maps `sageparse` straight at src/ and every compiler edit — new
 # modules included — is live in the next session with no reinstall.  The

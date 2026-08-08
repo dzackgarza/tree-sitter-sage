@@ -34,31 +34,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The parser jobs below prove the grammar parses. This one proves the
-  # lowered output runs, which is the only thing that makes this package a
-  # preparser rather than a syntax highlighter. It needs real Sage: the
-  # suite has no skips, and sageparse installs over `sage.repl.preparse`,
-  # so a fork or a partial install would test something else.
-  sage:
-    name: Test preparser under Sage
-    runs-on: ubuntu-latest
-    container: sagemath/sagemath:10.10.beta8
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Install the package into Sage's Python
-        # Editable so the finder maps `sageparse` at src/, matching how the
-        # local gate and every consumer install it.
-        run: |-
-          sage -pip install --no-build-isolation -e .
-          sage -pip install pytest
-      - name: Run the suite in a Sage session
-        # `sage -python` is Sage's interpreter, not a session: sage.all is
-        # absent there and Sage's own library assumes it. `sage -c` cannot
-        # carry arguments, so import it explicitly -- same reasoning as the
-        # `_sage-pytest` QC recipe.
-        run: sage -python -c "import sage.all, sys, pytest; sys.exit(pytest.main(['tests/', '-q']))"
-
   test:
     name: Test parser
     runs-on: ${{matrix.os}}
