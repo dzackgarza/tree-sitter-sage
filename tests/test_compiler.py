@@ -153,3 +153,25 @@ def test_rules_never_fire_over_error_bearing_nodes() -> None:
     assert "a, ?, b" in result.python
     with pytest.raises(SyntaxError):
         compile(result.python, "<cell>", "exec")
+
+
+def test_generator_ellipsis_infers_a_step_from_the_first_two_names() -> None:
+    # `x0, x2, ..., x10` is Haskell's `[a,b..c]`: the step is `b - a`, so
+    # this names six generators, not the eleven of a step-1 walk.  The
+    # expansion once took `x2` as the left endpoint and walked to `x10`
+    # by ones, silently building a ten-generator ring.
+    result = lower("R.<x0, x2, ..., x10> = ZZ[]\n")
+    assert "R = ZZ['x0, x2, x4, x6, x8, x10']" in result.python
+    assert "(x0, x2, x4, x6, x8, x10,) = R._first_ngens(6)" in result.python
+
+
+def test_generator_ellipsis_step_applies_to_letter_ranges() -> None:
+    result = lower("L.<a, c, ..., i> = Lattice(5)\n")
+    assert "names=('a', 'c', 'e', 'g', 'i',)" in result.python
+
+
+def test_generator_ellipsis_rejects_a_span_the_step_does_not_reach() -> None:
+    # `x0, x3, ..., x10` steps past the endpoint; failing at preparse
+    # beats declaring a ring the notation does not describe.
+    with pytest.raises(AssertionError):
+        lower("R.<x0, x3, ..., x10> = ZZ[]\n")

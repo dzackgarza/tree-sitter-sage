@@ -383,6 +383,19 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
 _INDEXED_NAME = re.compile(r"([A-Za-z_]+)(\d+)([A-Za-z_]*)")
 
 
+def _span_step(start: int, previous: int | None) -> int:
+    """Distance between successive names, from the two before the span."""
+    return start - previous if previous is not None else 1
+
+
+def _span_range(start: int, stop: int, step: int, span: str) -> range:
+    """The interior of a span, or an assertion naming why it has none."""
+    assert step != 0, f"'...' repeats a name: {span}"
+    assert (stop - start) % step == 0, f"'...' step {step} does not reach the end of {span}"
+    assert (stop - start) // step > 0, f"'...' range does not ascend: {span}"
+    return range(start + step, stop, step)
+
+
 def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     r"""Expand ``['a1', '...', 'a8']`` through ``'a8'`` at compile time.
 
@@ -390,6 +403,12 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     stem (``e1..e8``, ``a1t..a8t``) and single letters step through the
     alphabet — so no downstream constructor ever sees an ellipsis.
     Malformed spans fail here, at preparse, never as a wrong declaration.
+
+    A name before the left endpoint sets the step, exactly as Haskell's
+    ``[a,b..c]`` reads ``b - a``: ``x0, x2, ..., x10`` names six
+    generators, not eleven.  Only a name sharing the endpoints' stem
+    counts, so the ``e1`` of ``v1, v2, e1, ..., e4`` starts a fresh span
+    at step one rather than inheriting a step from ``v2``.
     """
     expanded: list[str] = []
     for i, slot in enumerate(slots):
@@ -398,17 +417,23 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
             continue
         assert 0 < i < len(slots) - 1, "'...' needs a name on each side"
         before, after = expanded[-1], slots[i + 1]
+        span = f"{before}, ..., {after}"
+        previous = expanded[-2] if len(expanded) > 1 else None
         left = _INDEXED_NAME.fullmatch(before)
         right = _INDEXED_NAME.fullmatch(after)
         if left and right:
             assert left.group(1) == right.group(1) and left.group(3) == right.group(3), f"'...' between different stems: {before} and {after}"
-            start, stop = int(left.group(2)), int(right.group(2))
-            assert stop > start, f"'...' range does not ascend: {before}..{after}"
             stem, suffix = left.group(1), left.group(3)
-            expanded.extend(f"{stem}{k}{suffix}" for k in range(start + 1, stop))
+            prior = _INDEXED_NAME.fullmatch(previous) if previous else None
+            same_stem = prior is not None and prior.group(1) == stem and prior.group(3) == suffix
+            step = _span_step(int(left.group(2)), int(prior.group(2)) if same_stem and prior else None)
+            interior = _span_range(int(left.group(2)), int(right.group(2)), step, span)
+            expanded.extend(f"{stem}{k}{suffix}" for k in interior)
             continue
-        assert len(before) == 1 and len(after) == 1 and before < after, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
-        expanded.extend(chr(c) for c in range(ord(before) + 1, ord(after)))
+        assert len(before) == 1 and len(after) == 1, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
+        adjacent = ord(previous) if previous is not None and len(previous) == 1 else None
+        step = _span_step(ord(before), adjacent)
+        expanded.extend(chr(c) for c in _span_range(ord(before), ord(after), step, span))
     return expanded
 
 
