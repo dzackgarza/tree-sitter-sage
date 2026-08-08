@@ -1,10 +1,14 @@
 r"""``.sage`` as library source: the importer and the build backend.
 
 Both frontends bind the names the lowering emits to real Sage objects,
-so these need a Sage installation and are skipped without one.  Run them
-with ``sage -python -m pytest``; the grammar's own CI has no Sage and
-sees them skipped, which is why every claim about the compiler core
-lives in a Sage-free test module instead.
+so these need Sage, like the rest of the suite.  Sage is a hard
+dependency of a Sage preparser: a missing one is a broken setup and
+fails loudly here rather than quietly proving less.  QC runs the suite
+through ``sage.all`` for this reason; see the ``_sage-pytest`` recipe.
+
+The core's Sage-free claim is not established by these tests being
+optional — it is checked on the import graph, in
+``test_sage_free_core``.
 """
 
 from __future__ import annotations
@@ -15,14 +19,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
-# `pytest.importorskip` is not usable here: this repo ships a `sage.so` --
-# the tree-sitter parser -- which shadows the name, so `import sage` fails
-# rather than being absent, and importorskip re-raises that.
-try:
-    from sage.rings.integer import Integer
-except Exception:
-    pytest.skip("no usable Sage in this interpreter", allow_module_level=True)
+from sage.rings.integer import Integer
 
 # The parent type of a wrapped literal, asserted against below rather than
 # spelled twice.

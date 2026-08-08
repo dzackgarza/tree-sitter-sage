@@ -7,23 +7,18 @@ Sage-free so the grammar's CI can run without an installation — so it
 conforms instead, and this module is where that conformance is checked
 against the live function rather than against remembered values.
 
-Skipped without Sage, like ``test_sage_modules``.  The claims about what
-the compiler emits live in the Sage-free modules; only the agreement
-with Sage lives here.
+Needs Sage, like the rest of the suite: the oracle is a live
+``ellipsis_range``, and a conformance check with nothing to conform to
+is not worth running.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from sageparse import expand_generator_ellipsis
+from sage.arith.srange import ellipsis_range
 
-# `pytest.importorskip` is not usable here for the reason given in
-# `test_sage_modules`: this repo ships a `sage.so` that shadows the name.
-try:
-    from sage.arith.srange import ellipsis_range
-except Exception:
-    pytest.skip("no usable Sage in this interpreter", allow_module_level=True)
+from sageparse import expand_generator_ellipsis
 
 # (from, then, stop) — `then` is the name that sets the step, or None for
 # a bare span.  Chosen so a naive step-1 walk fails on most rows: spans

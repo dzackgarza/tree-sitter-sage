@@ -29,24 +29,7 @@ test-commit:
 test-push:
     tree-sitter test
     @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
-    @just test-without-sage
     @just refresh-local
-
-# The suite again, in an interpreter with no Sage in it.
-#
-# The Sage profile runs pytest under Sage, which is what makes the
-# runtime claims provable.  This repo also claims the opposite: the
-# compiler core and the rule tables carry no Sage import, so an editor or
-# language server can lower a file without a Sage installation.  Nothing
-# in the profile checks that, and it is not a claim about the tests — it
-# is a claim about the package, and it holds only as long as no core
-# module grows a Sage import.
-#
-# Central QC's pytest recipe runs in an ephemeral `uvx` environment,
-# which is exactly the interpreter that claim describes.  The Sage-only
-# modules skip here by design; that is the point of running it twice.
-test-without-sage:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . _pytest
 
 # Run CI acceptance QC through the central implementation.
 test-ci:
