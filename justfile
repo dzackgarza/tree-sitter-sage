@@ -37,25 +37,33 @@ test-ci:
 
 # Put a Sage on a bare runner, for the QC workflow's setup_recipe hook.
 #
-# conda-forge rather than apt: Ubuntu carries no `sagemath` package after
-# jammy, so `apt install sagemath` has no installation candidate on the
-# noble runner image. conda-forge's `sage` is the binary distribution
-# Sage's own installation guide points at, and it is a real Sage -- which
-# is the whole requirement, since gating a Sage preparser on something
-# without `sage.all` is how this suite once came to pass under
-# `sage -python`.
+# The upstream Docker distribution, lifted out of its image onto the
+# runner.  Two nearer routes do not work:
 #
-# It is slow. CI time is not wall-clock anyone waits on.
+#   apt   -- Ubuntu carries no `sagemath` package after jammy, and the
+#            runner image is noble, so there is no candidate to install.
+#   conda -- conda-forge's Sage is a real sage.all but installs exactly one
+#            binary, the small argparse CLI from `sage.cli`.  QC drives Sage
+#            through the distribution's driver script (`--preparse`,
+#            `-python`, `-pip`), and that script is not in the package.
+#
+# `sagemath/sagemath` is the distribution build, driver script included.
+# SAGE_ROOT is baked in at configure time, so the tree is restored to the
+# same absolute path it was configured at rather than relocated.  The tag
+# is pinned to the version this repo is developed against, so the gate and
+# the desk run the same Sage.
 ci-provision-sage:
     #!/usr/bin/env bash
     set -euo pipefail
-    export MAMBA_ROOT_PREFIX="$HOME/micromamba"
-    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C "$HOME" bin/micromamba
-    "$HOME/bin/micromamba" create -y -n sage -c conda-forge sage pip pytest coverage
-    sage_bin="$MAMBA_ROOT_PREFIX/envs/sage/bin/sage"
+    docker create --name sage-dist sagemath/sagemath:10.10.beta0
+    sudo install -d -o "$(id -un)" -g "$(id -gn)" /home/sage
+    docker cp sage-dist:/home/sage/sage /home/sage/sage
+    docker rm sage-dist
+    sage_bin=/home/sage/sage/sage
     # The sage profile installs nothing, so this is where the project has to
     # reach Sage's own interpreter: the suite imports sageparse under it.
-    "$MAMBA_ROOT_PREFIX/envs/sage/bin/python" -m pip install --quiet -e .
+    "$sage_bin" -pip install --quiet pytest coverage
+    "$sage_bin" -pip install --quiet -e .
     echo "SAGE_BIN=$sage_bin" >> "${GITHUB_ENV:-/dev/stdout}"
     "$sage_bin" -c "import sys; print('sage', sys.version)"
 
