@@ -29,9 +29,12 @@ from sageparse import (
     LoweringRule,
     Node,
     ellipsis_arguments,
+    expand_generator_ellipsis,
     has_ellipsis,
+    lower_generator_assignment,
     lower_node,
     named_elements,
+    pad_to_source_lines,
     splice,
 )
 
@@ -135,9 +138,54 @@ def _lower_set_comprehension(node: Node, context: Context) -> str:
     return f"Set([{inner[1:-1]}])"
 
 
+# ---------------------------------------------------------------------------
+# Polynomial rings: the ring names its own generators
+# ---------------------------------------------------------------------------
+
+
+def _subscript_names(node: Node, context: Context) -> list[str] | None:
+    """Generator names of ``ZZ[x, y]``, or ``None`` if it is not that."""
+    children = node.children_by_field_name("subscript")
+    if not children or any(child.type not in ("identifier", "ellipsis") for child in children):
+        return None
+    return expand_generator_ellipsis([context.text(child) for child in children])
+
+
+def _lower_generator_assignment(node: Node, context: Context) -> str:
+    r"""Lower ``R.<x,y> = ZZ[x,y]``, the ring written as it is written.
+
+    Sage spells this ``R.<x,y> = ZZ[]``, whose right-hand side denotes no
+    object at all: ``ZZ[]`` is not even Python, and exists only to give
+    the declared names somewhere to land.  Writing the generators inside
+    the ring instead says the same thing about a ring that is really
+    there, so the subscript is quoted in place.
+
+    Sage's own reading of ``R.<x,y> = ZZ[x,y]`` evaluates the subscript
+    before the names exist, which is a ``NameError``; the core reproduces
+    that faithfully, and only this dialect reinterprets it.  Names that
+    do not match the declaration are left to the core, where they keep
+    meaning whatever Sage says they mean.
+    """
+    right = node.child_by_field_name("right")
+    name = node.child_by_field_name("name")
+    if right is None or name is None or right.type != "subscript" or node.children_by_field_name("other_target"):
+        return lower_generator_assignment(node, context)
+    generators = expand_generator_ellipsis([context.text(child) for child in node.children_by_field_name("generator")])
+    if _subscript_names(right, context) != generators:
+        return lower_generator_assignment(node, context)
+    value = right.child_by_field_name("value")
+    assert value is not None
+    obj = context.text(name)
+    quoted = "'" + ", ".join(generators) + "'"
+    gens = ", ".join(generators)
+    rebuilt = f"{obj} = {lower_node(value, context)}[{quoted}]; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return pad_to_source_lines(rebuilt, node, context)
+
+
 EXTENSION: dict[str, LoweringRule] = {
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
+    "sage_generator_assignment": _lower_generator_assignment,
 }
 
 # Names the extension's lowerings emit into generated Python.

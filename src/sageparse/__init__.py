@@ -643,6 +643,8 @@ named_elements = _named_elements
 has_ellipsis = _has_ellipsis
 pad_to_source_lines = _pad_to_source_lines
 ellipsis_arguments = _ellipsis_arguments
+expand_generator_ellipsis = _expand_generator_ellipsis
+lower_generator_assignment = _lower_generator_assignment
 
 # Names the core lowerings emit into generated Python; resolution-based
 # tools (pyflakes, jedi) must treat them as defined.
