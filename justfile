@@ -64,8 +64,19 @@ ci-provision-sage:
     # reach Sage's own interpreter: the suite imports sageparse under it.
     "$sage_bin" -pip install --quiet pytest coverage
     "$sage_bin" -pip install --quiet -e .
+    # Installing the distribution is not installing the preparser.
+    # `sageparse.preparser` replaces Sage's entrypoints when it is
+    # imported, and `sage --preparse` is a fresh process that imports
+    # nothing of ours -- so without this, QC preparses this repo's own
+    # demo with the preparser this repo replaces, and `2x*y` is a syntax
+    # error.  A .pth line is how a package gets imported at interpreter
+    # startup; on this developer's machine a sitecustomize does the same
+    # job.
+    site_packages="$("$sage_bin" -python -c 'import site; print(site.getsitepackages()[0])')"
+    printf 'import sageparse.preparser\n' > "$site_packages/sageparse-preparser.pth"
     echo "SAGE_BIN=$sage_bin" >> "${GITHUB_ENV:-/dev/stdout}"
     "$sage_bin" -c "import sys; print('sage', sys.version)"
+    "$sage_bin" -python -c "import sage.repl.preparse, sageparse.preparser; assert sage.repl.preparse.preparse is sageparse.preparser.preparse, 'the preparser did not install'"
 
 # Refresh the live consumers.  The Python installs are editable, so their
 # finder maps `sageparse` straight at src/ and every compiler edit — new
