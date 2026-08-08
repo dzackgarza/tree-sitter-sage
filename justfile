@@ -37,18 +37,25 @@ test-ci:
 
 # Put a Sage on a bare runner, for the QC workflow's setup_recipe hook.
 #
-# Sage ships no wheel, so this is a package install rather than a pip one,
-# and it is slow. That is fine: CI time is not wall-clock anyone waits on,
-# and the alternative -- gating a Sage preparser on something that is not
-# Sage -- is how this repo already got a suite that passed against
-# `sage -python`, an interpreter with no sage.all in it.
+# conda-forge rather than apt: Ubuntu carries no `sagemath` package after
+# jammy, so `apt install sagemath` has no installation candidate on the
+# noble runner image. conda-forge's `sage` is the binary distribution
+# Sage's own installation guide points at, and it is a real Sage -- which
+# is the whole requirement, since gating a Sage preparser on something
+# without `sage.all` is how this suite once came to pass under
+# `sage -python`.
+#
+# It is slow. CI time is not wall-clock anyone waits on.
 ci-provision-sage:
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo apt-get update
-    sudo apt-get install -y --no-install-recommends sagemath
-    sage_bin="$(command -v sage)"
-    "$sage_bin" --python -m pip install --quiet pytest
+    export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj -C "$HOME" bin/micromamba
+    "$HOME/bin/micromamba" create -y -n sage -c conda-forge sage pip pytest coverage
+    sage_bin="$MAMBA_ROOT_PREFIX/envs/sage/bin/sage"
+    # The sage profile installs nothing, so this is where the project has to
+    # reach Sage's own interpreter: the suite imports sageparse under it.
+    "$MAMBA_ROOT_PREFIX/envs/sage/bin/python" -m pip install --quiet -e .
     echo "SAGE_BIN=$sage_bin" >> "${GITHUB_ENV:-/dev/stdout}"
     "$sage_bin" -c "import sys; print('sage', sys.version)"
 
