@@ -25,8 +25,13 @@ ARRANGEMENTS = 10!
 R.<x, y> = QQ[]
 S.<a0, ..., a4> = ZZ[]
 
-# Implicit multiplication: juxtaposition is a product.
-CONIC = x^2 + 2x*y + y^2
+# Implicit multiplication -- juxtaposition as a product, `2x` for `2*x`
+# -- is off by default, as it is in Sage; `implicit_multiplication()`
+# turns it on, and the compiler tests cover it with it on.  This file is
+# core-default notation, so the product is written out.  It was not,
+# and the file only preparsed because the research dialect happened to
+# be loaded in the session preparsing it.
+CONIC = x^2 + 2*x*y + y^2
 
 # An ellipsis range builds the whole list.
 SQUARES = [n^2 for n in [1..10]]

@@ -18,6 +18,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import textwrap
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -226,7 +227,25 @@ def test_the_prelude_imports_only_the_names_used(tree: Path, tmp_path: Path) -> 
         assert f"import {unused}" not in generated, f"{unused} is never emitted by this module"
 
 
-def test_the_notation_demo_runs_and_computes() -> None:
+@pytest.fixture
+def core_defaults() -> Iterator[None]:
+    """Preparser settings as a plain ``sageparse.preparser`` install has them.
+
+    A session that has loaded a dialect is not the default one — the
+    research dialect turns implicit multiplication on at import — and on
+    this developer's machine a sitecustomize loads it into every Sage
+    process.  Anything claiming to be core notation has to be checked
+    against the core settings, not against whatever the session picked
+    up.
+    """
+    from sageparse.preparser import implicit_multiplication
+
+    previous = implicit_multiplication(False)
+    yield
+    implicit_multiplication(previous)
+
+
+def test_the_notation_demo_runs_and_computes(core_defaults: None) -> None:
     r"""`demo/notation.sage` is executable Sage, not a syntax display.
 
     QC preparses it and byte-compiles the result, which proves the
