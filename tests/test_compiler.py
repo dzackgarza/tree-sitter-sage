@@ -197,3 +197,11 @@ def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
     # many generators all named x0.
     with pytest.raises(ValueError):
         lower("R.<x0, x0, ..., x10> = Lattice(2)\n")
+
+
+def test_identifier_normalization_cannot_merge_two_source_names() -> None:
+    with pytest.raises(SyntaxError, match="both normalize to 'Z'"):
+        lower("ℤ = 1\nZ = 2\n")
+
+    result = lower("ℤ = 1\ndef f():\n    Z = 2\n    return Z\n")
+    compile(result.python, "<cell>", "exec")

@@ -28,6 +28,7 @@ is still the complete replacement.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
@@ -51,6 +52,47 @@ _PARSER = Parser(_LANGUAGE)
 
 _HUGE_INTEGER_DIGITS = 4300
 _RAW_SUFFIX = re.compile(r"[rRlLjJ]+$")
+
+_IDENTIFIER_SCOPES = frozenset(
+    {"module", "function_definition", "class_definition", "lambda"}
+)
+
+
+def _identifier_scope(node: Node) -> Node:
+    parent = node.parent
+    if parent is not None and parent.type in {"function_definition", "class_definition"}:
+        if parent.child_by_field_name("name") == node:
+            parent = parent.parent
+    while parent is not None and parent.type not in _IDENTIFIER_SCOPES:
+        parent = parent.parent
+    assert parent is not None, "every identifier belongs to a lexical scope"
+    return parent
+
+
+def _assert_identifier_normalization_is_injective(tree: Tree, source: bytes) -> None:
+    r"""Reject two source spellings for one Python identifier in one scope."""
+    spellings: dict[tuple[int, str], str] = {}
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.type != "identifier":
+            continue
+        parent = node.parent
+        if parent is not None and parent.type == "attribute":
+            if parent.named_children[-1] == node:
+                continue
+        spelling = source[node.start_byte : node.end_byte].decode("utf-8")
+        normalized = unicodedata.normalize("NFKC", spelling)
+        key = (_identifier_scope(node).start_byte, normalized)
+        previous = spellings.setdefault(key, spelling)
+        if previous != spelling:
+            line = node.start_point[0] + 1
+            raise SyntaxError(
+                f"identifiers {previous!r} and {spelling!r} both normalize to "
+                f"{normalized!r} in one scope",
+                ("<sage>", line, node.start_point[1] + 1, spelling),
+            )
 
 
 @dataclass(frozen=True)
@@ -671,6 +713,7 @@ def lower(
         tree = _PARSER.parse(encoded, old_tree)
     else:
         tree = _PARSER.parse(encoded)
+    _assert_identifier_normalization_is_injective(tree, encoded)
     context = _Context(source=encoded, rules=rules, numbers=numbers, products=products)
     segments = tuple(_segments(tree.root_node, context))
     python = "".join(segment.text for segment in segments)
