@@ -53,9 +53,7 @@ _PARSER = Parser(_LANGUAGE)
 _HUGE_INTEGER_DIGITS = 4300
 _RAW_SUFFIX = re.compile(r"[rRlLjJ]+$")
 
-_IDENTIFIER_SCOPES = frozenset(
-    {"module", "function_definition", "class_definition", "lambda"}
-)
+_IDENTIFIER_SCOPES = frozenset({"module", "function_definition", "class_definition", "lambda"})
 
 
 def _identifier_scope(node: Node) -> Node:
@@ -85,12 +83,13 @@ def _assert_identifier_normalization_is_injective(tree: Tree, source: bytes) -> 
         spelling = source[node.start_byte : node.end_byte].decode("utf-8")
         normalized = unicodedata.normalize("NFKC", spelling)
         key = (_identifier_scope(node).start_byte, normalized)
-        previous = spellings.setdefault(key, spelling)
-        if previous != spelling:
+        previous = spellings.get(key)
+        if previous is None:
+            spellings[key] = spelling
+        elif previous != spelling:
             line = node.start_point[0] + 1
             raise SyntaxError(
-                f"identifiers {previous!r} and {spelling!r} both normalize to "
-                f"{normalized!r} in one scope",
+                f"identifiers {previous!r} and {spelling!r} both normalize to {normalized!r} in one scope",
                 ("<sage>", line, node.start_point[1] + 1, spelling),
             )
 
