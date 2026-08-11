@@ -72,10 +72,7 @@ class SageLoader(SourceFileLoader):
         prelude = runtime_namespace()
         module.__dict__.update({name: value for name, value in prelude.items() if name not in module.__dict__})
         super().exec_module(module)
-        module.__dict__["__sageparse_runtime_names__"] = frozenset(
-            name for name, value in prelude.items()
-            if module.__dict__.get(name) is value
-        )
+        module.__dict__["__sageparse_runtime_names__"] = frozenset(name for name, value in prelude.items() if module.__dict__.get(name) is value)
 
 
 class SageFinder(MetaPathFinder):
