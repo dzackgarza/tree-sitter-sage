@@ -50,7 +50,11 @@ def _prelude(python: str) -> str:
     """
     referenced = {node.id for node in ast.walk(ast.parse(python)) if isinstance(node, ast.Name)}
     imports = runtime_imports()
-    return "".join(f"{imports[name]}\n" for name in sorted(referenced & imports.keys()))
+    names = sorted(referenced & imports.keys())
+    if not names:
+        return ""
+    bindings = "".join(f"{imports[name]}\n" for name in names)
+    return f"{bindings}__sageparse_runtime_names__ = frozenset({names!r})\n"
 
 
 def lower_source(source: str) -> str:

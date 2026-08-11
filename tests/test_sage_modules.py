@@ -108,10 +108,12 @@ def test_module_identity_is_pythons(tree: Path) -> None:
         print(A.__spec__.name, A.__package__, A.__file__.endswith("algorithms.sage"))
         print("mypkg.algorithms" in sys.modules)
         print(importlib.reload(A) is A)
+        print("Integer" in A.__sageparse_runtime_names__)
+        print("ring" not in A.__sageparse_runtime_names__)
         """,
     )
     assert "mypkg.algorithms mypkg True" in out
-    assert out.count("True") == 3
+    assert out.count("True") == 5
 
 
 def test_a_traceback_names_the_sage_file_and_line(tree: Path) -> None:
@@ -223,6 +225,7 @@ def test_the_prelude_imports_only_the_names_used(tree: Path, tmp_path: Path) -> 
     generated = (tmp_path / "narrow" / "mypkg" / "algorithms.py").read_text()
     assert "from sage.rings.integer import Integer" in generated
     assert "from sage.arith.srange import ellipsis_range" in generated
+    assert "__sageparse_runtime_names__ = frozenset(['Integer', 'ellipsis_range'])" in generated
     for unused in ("matrix", "symbolic_expression", "factorial"):
         assert f"import {unused}" not in generated, f"{unused} is never emitted by this module"
 
