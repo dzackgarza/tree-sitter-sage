@@ -56,6 +56,7 @@ setup(
     package_data={
         "tree_sitter_sage": ["*.pyi", "py.typed"],
         "tree_sitter_sage.queries": ["*.scm"],
+        "sageparse": ["py.typed"],
     },
     ext_package="tree_sitter_sage",
     ext_modules=[
