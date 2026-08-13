@@ -7,9 +7,8 @@ reference (``Integer``, ``RealNumber``, ``ellipsis_range``, ``Set``, ...) are
 supplied explicitly, exactly as a notebook REPL namespace supplies them.
 """
 
-from typing import Any
-
 from itertools import islice
+from typing import Any
 
 from sage.all import (
     CC,
@@ -31,8 +30,6 @@ from sage.all import (
 )
 
 from sageparse.preparser import preparse, research
-
-
 
 # What an executed cell's namespace is: names bound to whatever objects the
 # cell builds.  ``Any`` is the honest element type -- the values are Sage

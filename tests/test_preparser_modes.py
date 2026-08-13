@@ -11,14 +11,13 @@ Plain-Python test file: source strings below pass only through the research
 ``preparse`` under test.
 """
 
-from typing import Any
-
 import ast
 import contextlib
 import io
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 import sage.repl.load
@@ -38,8 +37,6 @@ from sage.all import (
 
 from sageparse import lower
 from sageparse.preparser import preparse, preparse_file, research
-
-
 
 # What an executed cell's namespace is: names bound to whatever objects the
 # cell builds.  ``Any`` is the honest element type -- the values are Sage

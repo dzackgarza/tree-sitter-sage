@@ -18,10 +18,9 @@ materialization (``list(r)``), because ``ImageSet == Set([...])`` is not
 elementwise equality.
 """
 
-from typing import Any
-
 from dataclasses import dataclass
 from itertools import islice
+from typing import Any
 
 import pytest
 
