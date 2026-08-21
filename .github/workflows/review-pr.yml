@@ -9,8 +9,9 @@ jobs:
       issues: read
     with:
       tier: test-ci
-      profile: 'python'
+      profile: 'sage'
       infra_ref: 'main'
+      setup_recipe: ci-provision-sage
   deterministic-diff:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
     permissions:
@@ -20,7 +21,7 @@ jobs:
       pull-requests: read
     with:
       gate: deterministic-diff
-      profile: 'python'
+      profile: 'sage'
   delegation-conformance:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
     permissions:
@@ -30,7 +31,7 @@ jobs:
       pull-requests: read
     with:
       gate: delegation-conformance
-      profile: 'python'
+      profile: 'sage'
   qc-doctor:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
     permissions:
@@ -42,7 +43,7 @@ jobs:
       pull-requests: read
     with:
       gate: qc-doctor
-      profile: 'python'
+      profile: 'sage'
   pr-description-checklist:
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
     permissions:
@@ -52,18 +53,7 @@ jobs:
       issues: read
     with:
       gate: pr-description-checklist
-      profile: 'python'
-  general:
-    uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-      pull-requests: write
-      issues: write
-    with:
-      report_type: general
-      scope: diff
+      profile: 'sage'
   slop:
     uses: dzackgarza/ai-review-ci/.github/workflows/_review.yml@main
     permissions:
@@ -77,7 +67,6 @@ jobs:
       scope: diff
   thread-resolution:
     needs:
-      - general
       - slop
     uses: dzackgarza/ai-review-ci/.github/workflows/_gates.yml@main
     permissions:
@@ -87,4 +76,4 @@ jobs:
       issues: read
     with:
       gate: thread-resolution
-      profile: 'python'
+      profile: 'sage'

@@ -28,6 +28,7 @@ is still the complete replacement.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
@@ -51,6 +52,46 @@ _PARSER = Parser(_LANGUAGE)
 
 _HUGE_INTEGER_DIGITS = 4300
 _RAW_SUFFIX = re.compile(r"[rRlLjJ]+$")
+
+_IDENTIFIER_SCOPES = frozenset({"module", "function_definition", "class_definition", "lambda"})
+
+
+def _identifier_scope(node: Node) -> Node:
+    parent = node.parent
+    if parent is not None and parent.type in {"function_definition", "class_definition"}:
+        if parent.child_by_field_name("name") == node:
+            parent = parent.parent
+    while parent is not None and parent.type not in _IDENTIFIER_SCOPES:
+        parent = parent.parent
+    assert parent is not None, "every identifier belongs to a lexical scope"
+    return parent
+
+
+def _assert_identifier_normalization_is_injective(tree: Tree, source: bytes) -> None:
+    r"""Reject two source spellings for one Python identifier in one scope."""
+    spellings: dict[tuple[int, str], str] = {}
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        if node.type != "identifier":
+            continue
+        parent = node.parent
+        if parent is not None and parent.type == "attribute":
+            if parent.named_children[-1] == node:
+                continue
+        spelling = source[node.start_byte : node.end_byte].decode("utf-8")
+        normalized = unicodedata.normalize("NFKC", spelling)
+        key = (_identifier_scope(node).start_byte, normalized)
+        previous = spellings.get(key)
+        if previous is None:
+            spellings[key] = spelling
+        elif previous != spelling:
+            line = node.start_point[0] + 1
+            raise SyntaxError(
+                f"identifiers {previous!r} and {spelling!r} both normalize to {normalized!r} in one scope",
+                ("<sage>", line, node.start_point[1] + 1, spelling),
+            )
 
 
 @dataclass(frozen=True)
@@ -383,6 +424,27 @@ def _lower_implicit_product(node: Node, context: _Context) -> str:
 _INDEXED_NAME = re.compile(r"([A-Za-z_]+)(\d+)([A-Za-z_]*)")
 
 
+def _span(start: int, then: int | None, stop: int) -> range:
+    """The whole span ``start, then, .., stop`` as indices.
+
+    This is Haskell's ``[a,b..c]`` and Sage's own ``ellipsis_range``,
+    which ``range`` already implements: the step is ``b - a``, the
+    endpoint is inclusive, a step that overshoots truncates
+    (``[0,3..10]`` is ``0,3,6,9``), and a backwards span is empty.
+    Reproducing those decisions by hand only invents a third dialect of
+    an answered question.
+
+    The two references part on one case, checked against ``ghc`` and a
+    live ``ellipsis_range``: a zero step makes ``[0,0..10]`` an infinite
+    list of zeros in Haskell, while ``ellipsis_range`` and ``range``
+    both raise.  Raising wins here — a ring cannot have infinitely many
+    generators all named ``x0`` — and it is Sage that this preparser
+    has to agree with.
+    """
+    step = then - start if then is not None else 1
+    return range(start, stop + (1 if step > 0 else -1), step)
+
+
 def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     r"""Expand ``['a1', '...', 'a8']`` through ``'a8'`` at compile time.
 
@@ -390,25 +452,53 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     stem (``e1..e8``, ``a1t..a8t``) and single letters step through the
     alphabet — so no downstream constructor ever sees an ellipsis.
     Malformed spans fail here, at preparse, never as a wrong declaration.
+
+    A name before the left endpoint sets the step, exactly as Haskell's
+    ``[a,b..c]`` reads ``b - a``: ``x0, x2, ..., x10`` names six
+    generators, not eleven.  Only a name sharing the endpoints' stem
+    counts, so the ``e1`` of ``v1, v2, e1, ..., e4`` starts a fresh span
+    at step one rather than inheriting a step from ``v2``.
+
+    A span owns its endpoints, because it may not reach the right one:
+    ``x0, x3, ..., x10`` stops at ``x9``.  Both names are taken back out
+    of the expansion and the whole sequence written in their place.
     """
     expanded: list[str] = []
-    for i, slot in enumerate(slots):
+    index = 0
+    while index < len(slots):
+        slot = slots[index]
         if slot != "...":
             expanded.append(slot)
+            index += 1
             continue
-        assert 0 < i < len(slots) - 1, "'...' needs a name on each side"
-        before, after = expanded[-1], slots[i + 1]
+        assert 0 < index < len(slots) - 1, "'...' needs a name on each side"
+        before, after = expanded.pop(), slots[index + 1]
+        previous = expanded[-1] if expanded else None
         left = _INDEXED_NAME.fullmatch(before)
         right = _INDEXED_NAME.fullmatch(after)
         if left and right:
             assert left.group(1) == right.group(1) and left.group(3) == right.group(3), f"'...' between different stems: {before} and {after}"
-            start, stop = int(left.group(2)), int(right.group(2))
-            assert stop > start, f"'...' range does not ascend: {before}..{after}"
             stem, suffix = left.group(1), left.group(3)
-            expanded.extend(f"{stem}{k}{suffix}" for k in range(start + 1, stop))
-            continue
-        assert len(before) == 1 and len(after) == 1 and before < after, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
-        expanded.extend(chr(c) for c in range(ord(before) + 1, ord(after)))
+            prior = _INDEXED_NAME.fullmatch(previous) if previous else None
+            steps_from = prior is not None and prior.group(1) == stem and prior.group(3) == suffix
+            start = int(prior.group(2)) if steps_from and prior else int(left.group(2))
+            then = int(left.group(2)) if steps_from else None
+            names = [f"{stem}{k}{suffix}" for k in _span(start, then, int(right.group(2)))]
+        else:
+            assert len(before) == 1 and len(after) == 1, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
+            steps_from = previous is not None and len(previous) == 1
+            start = ord(previous) if steps_from and previous else ord(before)
+            then = ord(before) if steps_from else None
+            names = [chr(c) for c in _span(start, then, ord(after))]
+        # An empty span is a legal list of numbers but not a legal
+        # declaration: `L.<a8, ..., a1>` would emit `(,) = L._first_ngens(0)`,
+        # which is a SyntaxError.  The span semantics stay Sage's; naming
+        # nothing is refused here, where the names become a declaration.
+        assert names, f"'...' span names no generator: {before}, ..., {after}"
+        if steps_from:
+            expanded.pop()
+        expanded.extend(names)
+        index += 2
     return expanded
 
 
@@ -422,7 +512,8 @@ def _lower_generator_assignment(node: Node, context: _Context) -> str:
     obj = context.text(name)
     targets = "".join(f", {other}" for other in others)
     gens = ", ".join(generators)
-    return f"{obj}{targets} = {constructor}; ({gens},) = {obj}._first_ngens({len(generators)})"
+    rebuilt = f"{obj}{targets} = {constructor}; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return _pad_to_source_lines(rebuilt, node, context)
 
 
 def _lower_constructor(right: Node, generators: list[str], context: _Context) -> str:
@@ -491,6 +582,23 @@ def _has_ellipsis(elements: list[Node]) -> bool:
     return any(element.type in {"sage_ellipsis_span", "sage_ellipsis"} for element in elements)
 
 
+def _pad_to_source_lines(rebuilt: str, node: Node, context: _Context) -> str:
+    r"""Give ``rebuilt`` the newline count of the span it replaces.
+
+    A rule that joins a multi-line construct onto one line shifts every
+    later line of the file, so a traceback, a coverage report, or a
+    breakpoint would name the wrong one.  These rewrites all end in a
+    closing bracket, where newlines are insignificant, so the lines can
+    simply be put back and the geometry holds without a second pass over
+    the tree.
+    """
+    missing = context.text(node).count("\n") - rebuilt.count("\n")
+    if missing <= 0:
+        return rebuilt
+    assert rebuilt.endswith(")"), f"cannot pad a rewrite that does not close a bracket: {rebuilt!r}"
+    return rebuilt[:-1] + "\n" * missing + ")"
+
+
 def _named_elements(node: Node) -> list[Node]:
     # Comments are named extras; splicing them into a joined single-line
     # rewrite would comment out everything after them.
@@ -500,21 +608,21 @@ def _named_elements(node: Node) -> list[Node]:
 def _lower_list(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_range({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_range({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
 def _lower_parenthesized(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
 def _lower_tuple(node: Node, context: _Context) -> str | None:
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"(ellipsis_iter({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
@@ -525,7 +633,7 @@ def _lower_set(node: Node, context: _Context) -> str | None:
     # this rule wholesale.
     elements = _named_elements(node)
     if _has_ellipsis(elements):
-        return f"set(ellipsis_range({_ellipsis_arguments(elements, context)}))"
+        return _pad_to_source_lines(f"set(ellipsis_range({_ellipsis_arguments(elements, context)}))", node, context)
     return None
 
 
@@ -604,6 +712,7 @@ def lower(
         tree = _PARSER.parse(encoded, old_tree)
     else:
         tree = _PARSER.parse(encoded)
+    _assert_identifier_normalization_is_injective(tree, encoded)
     context = _Context(source=encoded, rules=rules, numbers=numbers, products=products)
     segments = tuple(_segments(tree.root_node, context))
     python = "".join(segment.text for segment in segments)
@@ -623,7 +732,10 @@ lower_node = _lower
 splice = _splice
 named_elements = _named_elements
 has_ellipsis = _has_ellipsis
+pad_to_source_lines = _pad_to_source_lines
 ellipsis_arguments = _ellipsis_arguments
+expand_generator_ellipsis = _expand_generator_ellipsis
+lower_generator_assignment = _lower_generator_assignment
 
 # Names the core lowerings emit into generated Python; resolution-based
 # tools (pyflakes, jedi) must treat them as defined.

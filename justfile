@@ -4,7 +4,7 @@
 
 # ai-review-ci contract variables consumed by doctor and workflow installers.
 ai_review_ci_schema_version := "1"
-ai_review_ci_profile := "python"
+ai_review_ci_profile := "sage"
 ai_review_ci_ref := "main"
 ai_review_ci_release_channel := "main"
 ai_review_ci_workflow_template_version := "1"
@@ -23,17 +23,60 @@ test-commit:
     # under `src/sageparse` live there too, and `generate` never writes them.
     if ! git diff --quiet -- src/parser.c src/grammar.json src/node-types.json tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
     tree-sitter test
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-commit
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-commit
 
 # Push-tier QC, then refresh every local installation consuming this grammar.
 test-push:
     tree-sitter test
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-push
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-push
     @just refresh-local
 
 # Run CI acceptance QC through the central implementation.
 test-ci:
-    @just -f ~/ai-review-ci/justfiles/python.just -d . test-ci
+    @just -f ~/ai-review-ci/justfiles/sage.just -d . test-ci
+
+# Put a Sage on a bare runner, for the QC workflow's setup_recipe hook.
+#
+# The upstream Docker distribution, lifted out of its image onto the
+# runner.  Two nearer routes do not work:
+#
+#   apt   -- Ubuntu carries no `sagemath` package after jammy, and the
+#            runner image is noble, so there is no candidate to install.
+#   conda -- conda-forge's Sage is a real sage.all but installs exactly one
+#            binary, the small argparse CLI from `sage.cli`.  QC drives Sage
+#            through the distribution's driver script (`--preparse`,
+#            `-python`, `-pip`), and that script is not in the package.
+#
+# `sagemath/sagemath` is the distribution build, driver script included.
+# SAGE_ROOT is baked in at configure time, so the tree is restored to the
+# same absolute path it was configured at rather than relocated.  The tag
+# is pinned to the version this repo is developed against, so the gate and
+# the desk run the same Sage.
+ci-provision-sage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker create --name sage-dist sagemath/sagemath:10.10.beta0
+    sudo install -d -o "$(id -un)" -g "$(id -gn)" /home/sage
+    docker cp sage-dist:/home/sage/sage /home/sage/sage
+    docker rm sage-dist
+    sage_bin=/home/sage/sage/sage
+    # The sage profile installs nothing, so this is where the project has to
+    # reach Sage's own interpreter: the suite imports sageparse under it.
+    "$sage_bin" -pip install --quiet pytest coverage
+    "$sage_bin" -pip install --quiet -e .
+    # Installing the distribution is not installing the preparser.
+    # `sageparse.preparser` replaces Sage's entrypoints when it is
+    # imported, and `sage --preparse` is a fresh process that imports
+    # nothing of ours -- so without this, QC preparses this repo's own
+    # demo with the preparser this repo replaces, and `2x*y` is a syntax
+    # error.  A .pth line is how a package gets imported at interpreter
+    # startup; on this developer's machine a sitecustomize does the same
+    # job.
+    site_packages="$("$sage_bin" -python -c 'import site; print(site.getsitepackages()[0])')"
+    printf 'import sageparse.preparser\n' > "$site_packages/sageparse-preparser.pth"
+    echo "SAGE_BIN=$sage_bin" >> "${GITHUB_ENV:-/dev/stdout}"
+    "$sage_bin" -c "import sys; print('sage', sys.version)"
+    "$sage_bin" -python -c "import sage.repl.preparse, sageparse.preparser; assert sage.repl.preparse.preparse is sageparse.preparser.preparse, 'the preparser did not install'"
 
 # Refresh the live consumers.  The Python installs are editable, so their
 # finder maps `sageparse` straight at src/ and every compiler edit — new

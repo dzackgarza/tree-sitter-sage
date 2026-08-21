@@ -29,8 +29,9 @@ from sage.repl import interpreter as sage_interpreter
 from sage.repl import preparse as sage_preparse
 from sage.repl.load import load_wrap
 
-from sageparse import RUNTIME_NAMES as _CORE_RUNTIME_NAMES
 from sageparse import LoweringRule, Products, lower
+from sageparse.runtime import IMPORTS as _CORE_IMPORTS
+from sageparse.runtime import NAMESPACE as _CORE_NAMESPACE
 
 _native_preparse = sage_preparse.preparse
 _native_preparse_file = sage_preparse.preparse_file
@@ -44,26 +45,47 @@ _LOAD_ATTACH = re.compile(r"^(\s*)(load|attach) ([^(].*)$", re.MULTILINE)
 # ---------------------------------------------------------------------------
 
 _extensions: list[Mapping[str, LoweringRule]] = []
-_runtime_names: list[str] = list(_CORE_RUNTIME_NAMES)
+_runtime: dict[str, object] = dict(_CORE_NAMESPACE)
+_imports: dict[str, str] = dict(_CORE_IMPORTS)
 
 
-def register_extension(rules: Mapping[str, LoweringRule], runtime_names: tuple[str, ...] = ()) -> None:
+def register_extension(
+    rules: Mapping[str, LoweringRule],
+    runtime: Mapping[str, object] | None = None,
+    imports: Mapping[str, str] | None = None,
+) -> None:
     r"""Add a lowering rule table to every later ``preparse``.
 
-    ``runtime_names`` are the names the table's lowerings emit into
-    generated Python; resolution-based tools read them from
+    ``runtime`` maps each name the table's lowerings emit to the object
+    that name must resolve to; an imported ``.sage`` module gets that
+    mapping as its prelude.  ``imports`` gives the same bindings as
+    source lines, which is what a module lowered ahead of time carries
+    instead.  Resolution-based tools read the keys from
     :func:`runtime_names`.  Registering the same table twice is a no-op,
     so a module can register at import and be imported repeatedly.
     """
     if rules in _extensions:
         return
     _extensions.append(rules)
-    _runtime_names.extend(name for name in runtime_names if name not in _runtime_names)
+    if runtime is not None:
+        _runtime.update(runtime)
+    if imports is not None:
+        _imports.update(imports)
+
+
+def runtime_namespace() -> dict[str, object]:
+    """A fresh prelude for one lowered module: emitted names to objects."""
+    return dict(_runtime)
+
+
+def runtime_imports() -> dict[str, str]:
+    """Emitted name to the import statement that binds it, for built modules."""
+    return dict(_imports)
 
 
 def runtime_names() -> tuple[str, ...]:
     """Names the installed dialect emits into generated Python."""
-    return tuple(_runtime_names)
+    return tuple(_runtime)
 
 
 # ---------------------------------------------------------------------------

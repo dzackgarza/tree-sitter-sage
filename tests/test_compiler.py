@@ -153,3 +153,55 @@ def test_rules_never_fire_over_error_bearing_nodes() -> None:
     assert "a, ?, b" in result.python
     with pytest.raises(SyntaxError):
         compile(result.python, "<cell>", "exec")
+
+
+def test_generator_ellipsis_infers_a_step_from_the_first_two_names() -> None:
+    # `x0, x2, ..., x10` is Haskell's `[a,b..c]`: the step is `b - a`, so
+    # this names six generators, not the eleven of a step-1 walk.  The
+    # expansion once took `x2` as the left endpoint and walked to `x10`
+    # by ones, silently building a ten-generator ring.
+    result = lower("R.<x0, x2, ..., x10> = ZZ[]\n")
+    assert "R = ZZ['x0, x2, x4, x6, x8, x10']" in result.python
+    assert "(x0, x2, x4, x6, x8, x10,) = R._first_ngens(6)" in result.python
+
+
+def test_generator_ellipsis_step_applies_to_letter_ranges() -> None:
+    result = lower("L.<a, c, ..., i> = Lattice(5)\n")
+    assert "names=('a', 'c', 'e', 'g', 'i',)" in result.python
+
+
+def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
+    # These expectations belong to Haskell's `[a,b..c]` and Sage's own
+    # `ellipsis_range`, not to this compiler.  Each row carries the two
+    # calls that produced it, run against `ghc` and a live Sage: a step
+    # that overshoots truncates rather than failing, and a span that
+    # cannot ascend is empty.  Reproducing them by hand invented a third
+    # dialect, which is what these rows exist to prevent.
+    #   [0,3..10]                          == [0, 3, 6, 9]
+    #   ellipsis_range(0, 3, Ellipsis, 10) == [0, 3, 6, 9]
+    assert "names=('x0', 'x3', 'x6', 'x9',)" in lower("R.<x0, x3, ..., x10> = Lattice(4)\n").python
+    #   [5..5]                        == [5]
+    #   ellipsis_range(5, Ellipsis, 5) == [5]
+    assert "names=('x5',)" in lower("R.<x5, ..., x5> = Lattice(1)\n").python
+    #   ['a','c'..'i']                == "acegi"
+    assert "names=('a', 'c', 'e', 'g', 'i',)" in lower("L.<a, c, ..., i> = Lattice(5)\n").python
+    #   [10..0]                        == []
+    #   ellipsis_range(10, Ellipsis, 0) == [] — legal as numbers, but a
+    #   declaration naming nothing would emit `(,) = R._first_ngens(0)`.
+    #   (ghc warns on this span too, under -Wempty-enumerations.)
+    with pytest.raises(AssertionError):
+        lower("R.<x10, ..., x0> = Lattice(0)\n")
+    # The one case the references disagree on. `[0,0..10]` is an
+    # infinite list of zeros in Haskell; `ellipsis_range(0, 0, ..., 10)`
+    # and `range` both raise. Sage wins — a ring cannot have infinitely
+    # many generators all named x0.
+    with pytest.raises(ValueError):
+        lower("R.<x0, x0, ..., x10> = Lattice(2)\n")
+
+
+def test_identifier_normalization_cannot_merge_two_source_names() -> None:
+    with pytest.raises(SyntaxError, match="both normalize to 'Z'"):
+        lower("ℤ = 1\nZ = 2\n")
+
+    result = lower("ℤ = 1\ndef f():\n    Z = 2\n    return Z\n")
+    compile(result.python, "<cell>", "exec")

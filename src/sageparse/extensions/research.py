@@ -24,14 +24,19 @@ preparser one.
 
 from __future__ import annotations
 
+import builtins
+
 from sageparse import (
     Context,
     LoweringRule,
     Node,
     ellipsis_arguments,
+    expand_generator_ellipsis,
     has_ellipsis,
+    lower_generator_assignment,
     lower_node,
     named_elements,
+    pad_to_source_lines,
     splice,
 )
 
@@ -135,9 +140,145 @@ def _lower_set_comprehension(node: Node, context: Context) -> str:
     return f"Set([{inner[1:-1]}])"
 
 
+# ---------------------------------------------------------------------------
+# Polynomial rings: the ring names its own generators
+# ---------------------------------------------------------------------------
+
+
+def _subscript_names(node: Node, context: Context) -> list[str] | None:
+    """Generator names of ``ZZ[x, y]``, or ``None`` if it is not that."""
+    children = node.children_by_field_name("subscript")
+    if not children or any(child.type not in ("identifier", "ellipsis") for child in children):
+        return None
+    return expand_generator_ellipsis([context.text(child) for child in children])
+
+
+def _lower_generator_assignment(node: Node, context: Context) -> str:
+    r"""Lower ``R.<x,y> = ZZ[x,y]``, the ring written as it is written.
+
+    Sage spells this ``R.<x,y> = ZZ[]``, whose right-hand side denotes no
+    object at all: ``ZZ[]`` is not even Python, and exists only to give
+    the declared names somewhere to land.  Writing the generators inside
+    the ring instead says the same thing about a ring that is really
+    there, so the subscript is quoted in place.
+
+    Sage's own reading of ``R.<x,y> = ZZ[x,y]`` evaluates the subscript
+    before the names exist, which is a ``NameError``; the core reproduces
+    that faithfully, and only this dialect reinterprets it.  Names that
+    do not match the declaration are left to the core, where they keep
+    meaning whatever Sage says they mean.
+    """
+    right = node.child_by_field_name("right")
+    name = node.child_by_field_name("name")
+    if right is None or name is None or right.type != "subscript" or node.children_by_field_name("other_target"):
+        return lower_generator_assignment(node, context)
+    generators = expand_generator_ellipsis([context.text(child) for child in node.children_by_field_name("generator")])
+    if _subscript_names(right, context) != generators:
+        return lower_generator_assignment(node, context)
+    value = right.child_by_field_name("value")
+    assert value is not None
+    obj = context.text(name)
+    quoted = "'" + ", ".join(generators) + "'"
+    gens = ", ".join(generators)
+    rebuilt = f"{obj} = {lower_node(value, context)}[{quoted}]; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return pad_to_source_lines(rebuilt, node, context)
+
+
+# Subtrees whose identifiers name something the file binds.  Reading a
+# whole node rather than its precise target over-collects — `G[i] = 1`
+# marks `G` and `i` bound, `import a.b` marks `a` and `b` — and that is
+# the safe direction: an over-collected name only keeps the ring rule
+# from firing, while a missed one would rewrite working code.
+_BINDING_FIELDS = {
+    "assignment": ("left",),
+    "augmented_assignment": ("left",),
+    "for_statement": ("left",),
+    "for_in_clause": ("left",),
+    "function_definition": ("name", "parameters"),
+    "lambda": ("parameters",),
+    "class_definition": ("name",),
+    "named_expression": ("name",),
+    "sage_generator_assignment": ("name", "generator", "other_target"),
+}
+_BINDING_NODES = frozenset(
+    {
+        "import_statement",
+        "import_from_statement",
+        "as_pattern_target",
+        "global_statement",
+        "nonlocal_statement",
+    }
+)
+
+
+def _identifiers(node: Node, into: set[str]) -> None:
+    if node.type == "identifier" and node.text is not None:
+        into.add(node.text.decode())
+    for child in node.children:
+        _identifiers(child, into)
+
+
+def _bound_names(node: Node) -> set[str]:
+    """Every name the file containing ``node`` binds, plus the builtins."""
+    root = node
+    while root.parent is not None:
+        root = root.parent
+    names = set(dir(builtins))
+    stack = [root]
+    while stack:
+        current = stack.pop()
+        if current.type in _BINDING_FIELDS:
+            for field in _BINDING_FIELDS[current.type]:
+                for target in current.children_by_field_name(field):
+                    _identifiers(target, names)
+        if current.type in _BINDING_NODES:
+            _identifiers(current, names)
+        stack.extend(current.children)
+    return names
+
+
+def _lower_assignment(node: Node, context: Context) -> str | None:
+    r"""Lower ``R = ZZ[x,y]`` when nothing in the file binds ``x`` or ``y``.
+
+    ``ZZ[x, y]`` is how the ring is written, and Sage already builds it
+    from symbolic variables or generators — the one case it cannot serve
+    is names that do not exist yet, where it raises ``NameError``.  This
+    binds them instead, exactly as ``R.<x,y> = ZZ[x,y]`` does.
+
+    Unboundness is what separates a ring from a subscript: ``G[i, j]``
+    and ``dict[str, Any]`` are the same shape, and both name things the
+    file binds — loop targets, imports, builtins.  A name bound nowhere
+    can only be a ``NameError`` today, so no working code changes
+    meaning.  The limit is that the file is all the compiler sees: in a
+    notebook, names bound in an earlier cell look unbound here, and
+    ``M = G[i, j]`` in a fresh cell would become a ring.  Declare the
+    generators with ``R.<i,j> = ...`` in that situation, or index with an
+    explicit tuple.
+    """
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    if left is None or right is None or left.type != "identifier" or right.type != "subscript":
+        return None
+    generators = _subscript_names(right, context)
+    if generators is None:
+        return None
+    bound = _bound_names(node)
+    if any(generator in bound for generator in generators):
+        return None
+    value = right.child_by_field_name("value")
+    assert value is not None
+    obj = context.text(left)
+    quoted = "'" + ", ".join(generators) + "'"
+    gens = ", ".join(generators)
+    rebuilt = f"{obj} = {lower_node(value, context)}[{quoted}]; ({gens},) = {obj}._first_ngens({len(generators)})"
+    return pad_to_source_lines(rebuilt, node, context)
+
+
 EXTENSION: dict[str, LoweringRule] = {
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
+    "sage_generator_assignment": _lower_generator_assignment,
+    "assignment": _lower_assignment,
 }
 
 # Names the extension's lowerings emit into generated Python.

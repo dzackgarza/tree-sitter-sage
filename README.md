@@ -65,5 +65,35 @@ The boundary is what a rule can decide from source text alone.
 Lowering `^` to a function call instead would force this repo to reassociate around implicit products by hand, because the grammar's tree is not the precedence — `x^2 y` is one product node.
 Textual `**` avoids the whole problem: CPython re-parses and supplies the grouping.
 
+## `.sage` as library source
+
+Sage treats `.sage` as a script language: `sage foo.sage` writes a `foo.sage.py` beside it, and `load()` executes a file into an existing namespace.
+Neither makes a module, so using Sage's own syntax disqualifies a file from being library source.
+That is missing integration, not a language limit, and `sageparse` supplies it two ways over the one compiler.
+
+At import time:
+
+```python
+import sageparse.preparser.importer
+
+import mypkg.algorithms          # mypkg/algorithms.sage
+from mypkg.algorithms import foo
+```
+
+Python keeps module semantics — `ModuleSpec`, `sys.modules`, packages via `__init__.sage`, relative imports, cycles, `reload`, and `__pycache__` — because the loader overrides only `source_to_code`. Lowering preserves line geometry, so a traceback names the `.sage` file *and* the author's line.
+
+At build time:
+
+```python
+from sageparse.build import lower_tree
+lower_tree(Path("src"), Path("build"))     # algorithms.sage -> algorithms.py
+```
+
+The `.sage` file stays the source nobody generates and the `.py` an artifact nobody edits.
+A built module carries import lines for only the runtime names its own lowering emitted, so it depends on the Sage libraries it uses and not on this compiler, the preparser, or the REPL layer.
+Its positions are its own, since the prelude has to precede the module body — which is why the importer exists for development and the artifact for release.
+
+Neither frontend gets `sage.all`. A script may reasonably want every Sage name in scope; a library module states its own mathematical imports.
+
 Three layers, three dependencies: the grammar recognizes, `sageparse` lowers with no Sage import at all, and `sageparse.preparser` is the only part that touches a Sage session.
 Editors and language servers use the middle layer without a Sage installation.
