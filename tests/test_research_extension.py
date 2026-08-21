@@ -81,6 +81,17 @@ def test_extension_leaves_indexing_whose_names_the_file_binds() -> None:
     assert _research("key = 1\nd = data[key]\n") == "key = Integer(1)\nd = data[key]\n"
 
 
+def test_extension_leaves_bound_ellipsis_indexing() -> None:
+    # `...` between names the file binds is Python's literal Ellipsis
+    # index (numpy's `G[x10, ..., x0]`), not a generator span.  Ownership
+    # must decline before any span expands: read as a span, `x10, ..., x0`
+    # names no generator and would refuse code that already works.
+    assert _research("x10 = 1\nx0 = 2\nM = G[x10, ..., x0]\n") == ("x10 = Integer(1)\nx0 = Integer(2)\nM = G[x10, ..., x0]\n")
+    assert _research("x = 1\nM = G[x, ...]\n") == "x = Integer(1)\nM = G[x, ...]\n"
+    # A bare `G[...]` binds no name at all, so there is no ring to build.
+    assert _research("M = G[...]\n") == "M = G[...]\n"
+
+
 def test_extension_builds_a_ring_from_names_nothing_binds() -> None:
     assert _research("R = ZZ[x,y]\n") == "R = ZZ['x, y']; (x, y,) = R._first_ngens(2)\n"
     assert _research("R = ZZ[x0,...,x3]\n") == ("R = ZZ['x0, x1, x2, x3']; (x0, x1, x2, x3,) = R._first_ngens(4)\n")

@@ -138,10 +138,11 @@ def test_generator_ellipsis_letter_range() -> None:
 
 def test_generator_ellipsis_rejects_malformed_spans() -> None:
     # Mismatched stems cannot expand; failing at preparse beats emitting
-    # a wrong declaration.
-    with pytest.raises(AssertionError):
+    # a wrong declaration.  The refusal is the compiler's standard one —
+    # a SyntaxError, like any other rejected source.
+    with pytest.raises(SyntaxError, match="different stems"):
         lower("L.<a1, ..., b8> = X(8)\n")
-    with pytest.raises(AssertionError):
+    with pytest.raises(SyntaxError, match="names no generator"):
         lower("L.<a8, ..., a1> = X(8)\n")
 
 
@@ -170,6 +171,18 @@ def test_generator_ellipsis_step_applies_to_letter_ranges() -> None:
     assert "names=('a', 'c', 'e', 'g', 'i',)" in result.python
 
 
+def test_generator_ellipsis_letter_span_ignores_an_unrelated_prior_letter() -> None:
+    # The letter analogue of the indexed branch's stem check: a prior
+    # letter sets the step only when that step points toward the right
+    # endpoint.  Here `x` is a standalone generator ahead of a fresh
+    # step-one span `a, ..., e` — the expansion once read a step of
+    # ord('a') - ord('x') = -23 from it and silently truncated all six
+    # declared generators to the single generator `x`.
+    result = lower("R.<x, a, ..., e> = QQ[]\n")
+    assert "R = QQ['x, a, b, c, d, e']" in result.python
+    assert "(x, a, b, c, d, e,) = R._first_ngens(6)" in result.python
+
+
 def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
     # These expectations belong to Haskell's `[a,b..c]` and Sage's own
     # `ellipsis_range`, not to this compiler.  Each row carries the two
@@ -189,7 +202,7 @@ def test_generator_ellipsis_matches_the_decided_span_semantics() -> None:
     #   ellipsis_range(10, Ellipsis, 0) == [] — legal as numbers, but a
     #   declaration naming nothing would emit `(,) = R._first_ngens(0)`.
     #   (ghc warns on this span too, under -Wempty-enumerations.)
-    with pytest.raises(AssertionError):
+    with pytest.raises(SyntaxError, match="names no generator"):
         lower("R.<x10, ..., x0> = Lattice(0)\n")
     # The one case the references disagree on. `[0,0..10]` is an
     # infinite list of zeros in Haskell; `ellipsis_range(0, 0, ..., 10)`

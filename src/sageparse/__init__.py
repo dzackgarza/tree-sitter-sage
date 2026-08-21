@@ -451,13 +451,17 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
     The endpoints determine the range textually — indexed names share a
     stem (``e1..e8``, ``a1t..a8t``) and single letters step through the
     alphabet — so no downstream constructor ever sees an ellipsis.
-    Malformed spans fail here, at preparse, never as a wrong declaration.
+    Malformed spans are refused here, at preparse, with a
+    :class:`SyntaxError` — never as a wrong declaration.
 
     A name before the left endpoint sets the step, exactly as Haskell's
     ``[a,b..c]`` reads ``b - a``: ``x0, x2, ..., x10`` names six
-    generators, not eleven.  Only a name sharing the endpoints' stem
-    counts, so the ``e1`` of ``v1, v2, e1, ..., e4`` starts a fresh span
-    at step one rather than inheriting a step from ``v2``.
+    generators, not eleven.  Only a related name counts: for indexed
+    names one sharing the endpoints' stem, so the ``e1`` of
+    ``v1, v2, e1, ..., e4`` starts a fresh span at step one rather than
+    inheriting a step from ``v2``; for single letters one whose step
+    points toward the right endpoint, so the ``x`` of ``x, a, ..., e``
+    is a standalone generator ahead of the span ``a`` through ``e``.
 
     A span owns its endpoints, because it may not reach the right one:
     ``x0, x3, ..., x10`` stops at ``x9``.  Both names are taken back out
@@ -471,13 +475,15 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
             expanded.append(slot)
             index += 1
             continue
-        assert 0 < index < len(slots) - 1, "'...' needs a name on each side"
+        if not 0 < index < len(slots) - 1:
+            raise SyntaxError("'...' needs a name on each side")
         before, after = expanded.pop(), slots[index + 1]
         previous = expanded[-1] if expanded else None
         left = _INDEXED_NAME.fullmatch(before)
         right = _INDEXED_NAME.fullmatch(after)
         if left and right:
-            assert left.group(1) == right.group(1) and left.group(3) == right.group(3), f"'...' between different stems: {before} and {after}"
+            if left.group(1) != right.group(1) or left.group(3) != right.group(3):
+                raise SyntaxError(f"'...' between different stems: {before} and {after}")
             stem, suffix = left.group(1), left.group(3)
             prior = _INDEXED_NAME.fullmatch(previous) if previous else None
             steps_from = prior is not None and prior.group(1) == stem and prior.group(3) == suffix
@@ -485,8 +491,18 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
             then = int(left.group(2)) if steps_from else None
             names = [f"{stem}{k}{suffix}" for k in _span(start, then, int(right.group(2)))]
         else:
-            assert len(before) == 1 and len(after) == 1, f"'...' needs indexed or single-letter endpoints: {before}, {after}"
-            steps_from = previous is not None and len(previous) == 1
+            if len(before) != 1 or len(after) != 1:
+                raise SyntaxError(f"'...' needs indexed or single-letter endpoints: {before}, {after}")
+            # The letter analogue of the indexed branch's stem check.
+            # Every single letter trivially "shares a stem", so the
+            # relatedness signal is direction: a prior letter is part of
+            # the span only when the step it sets points toward the right
+            # endpoint.  The `x` of `x, a, ..., e` is a standalone
+            # generator ahead of a fresh step-one span — not a step of
+            # ord('a') - ord('x') = -23 that would silently truncate six
+            # declared generators to one.  A zero step (`a, a, ..., e`)
+            # stays related, so it keeps raising exactly as `x0, x0` does.
+            steps_from = previous is not None and len(previous) == 1 and (ord(before) - ord(previous)) * (ord(after) - ord(before)) >= 0
             start = ord(previous) if steps_from and previous else ord(before)
             then = ord(before) if steps_from else None
             names = [chr(c) for c in _span(start, then, ord(after))]
@@ -494,7 +510,8 @@ def _expand_generator_ellipsis(slots: list[str]) -> list[str]:
         # declaration: `L.<a8, ..., a1>` would emit `(,) = L._first_ngens(0)`,
         # which is a SyntaxError.  The span semantics stay Sage's; naming
         # nothing is refused here, where the names become a declaration.
-        assert names, f"'...' span names no generator: {before}, ..., {after}"
+        if not names:
+            raise SyntaxError(f"'...' span names no generator: {before}, ..., {after}")
         if steps_from:
             expanded.pop()
         expanded.extend(names)

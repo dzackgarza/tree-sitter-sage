@@ -62,5 +62,5 @@ def test_an_empty_span_is_refused_where_sage_returns_nothing() -> None:
     # right that the span is empty, but a declaration naming nothing
     # would emit `(,) = R._first_ngens(0)`, which is a SyntaxError.
     assert ellipsis_range(10, Ellipsis, 0) == []
-    with pytest.raises(AssertionError):
+    with pytest.raises(SyntaxError, match="names no generator"):
         expand_generator_ellipsis(["x10", "...", "x0"])

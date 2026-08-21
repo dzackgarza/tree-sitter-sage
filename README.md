@@ -80,7 +80,7 @@ import mypkg.algorithms          # mypkg/algorithms.sage
 from mypkg.algorithms import foo
 ```
 
-Python keeps module semantics — `ModuleSpec`, `sys.modules`, packages via `__init__.sage`, relative imports, cycles, `reload`, and `__pycache__` — because the loader overrides only `source_to_code`. Lowering preserves line geometry, so a traceback names the `.sage` file *and* the author's line.
+Python keeps module semantics — `ModuleSpec`, `sys.modules`, packages via `__init__.sage`, relative imports, cycles, `reload`, and `__pycache__` — because the loader subclasses `SourceFileLoader` and overrides exactly two of its steps: `source_to_code` lowers the source, and `exec_module` seeds the module namespace with the runtime prelude before the body runs, then records the bindings the body left standing as `__sageparse_runtime_names__`. Seeding the namespace instead of prepending source is what preserves line geometry, so a traceback names the `.sage` file *and* the author's line.
 
 At build time:
 

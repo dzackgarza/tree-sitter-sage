@@ -18,6 +18,7 @@ mandatory.
 from __future__ import annotations
 
 import ast
+from importlib.util import resolve_name
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parent.parent / "src" / "sageparse"
@@ -33,15 +34,24 @@ def _module_name(path: Path) -> str:
     return ".".join(parts)
 
 
-def _imports(tree: ast.Module) -> set[str]:
-    """Every module named by an import in ``tree``, absolute form only."""
+def _imports(tree: ast.Module, package: str) -> set[str]:
+    """Every module named by an import in ``tree``, resolved to absolute form.
+
+    ``package`` is the importing module's package, the same anchor CPython
+    uses: relative imports resolve against it via
+    :func:`importlib.util.resolve_name`, so ``from . import runtime`` names
+    ``sageparse.runtime`` here exactly as it would at runtime.  Dropping
+    these edges instead would let one relative import smuggle the whole
+    Sage-owning half into the core without failing any test below.
+    """
     found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            found.add(node.module)
-            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = resolve_name("." * node.level + (node.module or ""), package)
+            found.add(module)
+            found.update(f"{module}.{alias.name}" for alias in node.names)
     return found
 
 
@@ -54,7 +64,11 @@ def _reachable_from(roots: list[str]) -> dict[str, set[str]]:
         name = pending.pop()
         if name in graph:
             continue
-        imported = _imports(ast.parse(by_name[name].read_text()))
+        # A package's relative imports resolve against itself; a plain
+        # module's resolve against its parent — the distinction CPython
+        # draws between ``__init__`` and everything else.
+        package = name if by_name[name].name == "__init__.py" else name.rpartition(".")[0]
+        imported = _imports(ast.parse(by_name[name].read_text()), package)
         graph[name] = imported
         for target in imported:
             # `from sageparse.extensions import research` names the module;
@@ -94,6 +108,19 @@ def test_the_walk_reaches_the_extension_rule_tables() -> None:
     graph = _reachable_from(_core_roots())
     assert "sageparse.extensions.research" in graph
     assert "sageparse" in graph
+
+
+def test_relative_imports_are_edges_of_the_graph() -> None:
+    # The one escape route the guarantee ever had: a collector that only
+    # saw absolute imports, so ``from . import runtime`` in a core module
+    # reached Sage without appearing in the graph at all.
+    tree = ast.parse("from . import runtime\nfrom .extensions import research\n")
+    assert _imports(tree, "sageparse") == {
+        "sageparse",
+        "sageparse.runtime",
+        "sageparse.extensions",
+        "sageparse.extensions.research",
+    }
 
 
 def test_the_sage_owning_half_is_outside_that_graph() -> None:

@@ -145,12 +145,17 @@ def _lower_set_comprehension(node: Node, context: Context) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _subscript_names(node: Node, context: Context) -> list[str] | None:
-    """Generator names of ``ZZ[x, y]``, or ``None`` if it is not that."""
+def _subscript_slots(node: Node, context: Context) -> list[str] | None:
+    """The written slots of ``ZZ[x, y]``, or ``None`` if it is not that.
+
+    Ellipses are kept as written.  Whether ``...`` is a generator span or
+    Python's literal ``Ellipsis`` index depends on who owns the names
+    around it, so the caller must settle ownership before expanding.
+    """
     children = node.children_by_field_name("subscript")
     if not children or any(child.type not in ("identifier", "ellipsis") for child in children):
         return None
-    return expand_generator_ellipsis([context.text(child) for child in children])
+    return [context.text(child) for child in children]
 
 
 def _lower_generator_assignment(node: Node, context: Context) -> str:
@@ -173,7 +178,8 @@ def _lower_generator_assignment(node: Node, context: Context) -> str:
     if right is None or name is None or right.type != "subscript" or node.children_by_field_name("other_target"):
         return lower_generator_assignment(node, context)
     generators = expand_generator_ellipsis([context.text(child) for child in node.children_by_field_name("generator")])
-    if _subscript_names(right, context) != generators:
+    slots = _subscript_slots(right, context)
+    if slots is None or expand_generator_ellipsis(slots) != generators:
         return lower_generator_assignment(node, context)
     value = right.child_by_field_name("value")
     assert value is not None
@@ -254,15 +260,27 @@ def _lower_assignment(node: Node, context: Context) -> str | None:
     ``M = G[i, j]`` in a fresh cell would become a ring.  Declare the
     generators with ``R.<i,j> = ...`` in that situation, or index with an
     explicit tuple.
+
+    Ownership is settled on the names as written, before any ellipsis
+    expands: in ``G[x10, ..., x0]`` over bound names the ``...`` is
+    Python's literal ``Ellipsis`` index, not a generator span, and a
+    span reading (which would refuse ``x10, ..., x0`` as naming no
+    generator) must never see working code.  Only a subscript whose
+    written names are all unbound — a certain ``NameError`` — has its
+    spans expanded, where a malformed span still fails loudly.
     """
     left = node.child_by_field_name("left")
     right = node.child_by_field_name("right")
     if left is None or right is None or left.type != "identifier" or right.type != "subscript":
         return None
-    generators = _subscript_names(right, context)
-    if generators is None:
+    slots = _subscript_slots(right, context)
+    if slots is None:
         return None
+    written = [slot for slot in slots if slot != "..."]
     bound = _bound_names(node)
+    if not written or any(name in bound for name in written):
+        return None
+    generators = expand_generator_ellipsis(slots)
     if any(generator in bound for generator in generators):
         return None
     value = right.child_by_field_name("value")

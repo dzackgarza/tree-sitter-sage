@@ -234,9 +234,7 @@ def test_a_built_module_needs_no_compiler(tree: Path, tmp_path: Path) -> None:
     # `__sageparse_runtime_names__` metadata constant — plain data naming
     # the injected runtime bindings, not a dependency on the compiler.
     compiler_mentions = [line for line in body.splitlines() if "sageparse" in line]
-    assert all(
-        line.startswith("__sageparse_runtime_names__ =") for line in compiler_mentions
-    ), "a built module must not depend on the compiler that made it"
+    assert all(line.startswith("__sageparse_runtime_names__ =") for line in compiler_mentions), "a built module must not depend on the compiler that made it"
     assert "sage.all" not in body, "a library module gets the names it emits, not the interactive layer"
 
 
@@ -327,12 +325,135 @@ def test_the_prelude_reads_references_not_prose(tmp_path: Path) -> None:
 
     generated = lower_file(source, tmp_path / "prose.py").read_text()
 
-    # The prelude precedes the module body, so it is everything before
-    # the docstring -- which is the one place the nouns legitimately are.
-    prelude = generated.split('"""')[0]
+    # The prelude is the generated import lines, and the docstring is the
+    # one place the nouns legitimately are, so the claim is about the
+    # imports rather than about a slice of the file.
+    prelude = [line for line in generated.splitlines() if line.startswith(("import ", "from "))]
     assert "from sage.rings.integer import Integer" in prelude, "2^3 emits Integer, so its import belongs"
-    assert "matrix" not in prelude, "the docstring's nouns are not references"
-    assert "symbolic_expression" not in prelude
+    assert not [line for line in prelude if "matrix" in line], "the docstring's nouns are not references"
+    assert not [line for line in prelude if "symbolic_expression" in line]
+
+
+# Heads a module may legally open with, each of which the prelude has to
+# stay below.  A future statement is a compiler directive Python accepts
+# only above every other statement, so an import placed over one is a
+# syntax error and the built module does not exist.
+HEADS = {
+    "nothing": "",
+    "one future statement": "from __future__ import annotations\n",
+    "a docstring, then a future statement": 'r"""What this module is for."""\n\nfrom __future__ import annotations\n',
+    "several future statements": "from __future__ import annotations\nfrom __future__ import division\n",
+}
+
+
+@pytest.mark.parametrize("head", HEADS.values(), ids=list(HEADS))
+def test_a_module_head_keeps_its_place_above_the_prelude(head: str, tmp_path: Path) -> None:
+    r"""A built module compiles whatever its source legally opened with.
+
+    Emitting the prelude at the very top put it over the source's own
+    ``__future__`` block, and CPython rejects the result outright --
+    every ``.sage`` file carrying ``from __future__ import annotations``
+    lowered to a module that could not be compiled at all.
+
+    Running the module is what proves the placement: the fix must not be
+    the prelude going missing, so the Sage literal still has to build a
+    Sage integer.
+    """
+    source = tmp_path / "head.sage"
+    source.write_text(f"{head}SIZE = 2^3\n")
+    from sageparse.build import lower_file
+
+    generated = lower_file(source, tmp_path / "head.py").read_text()
+    namespace: dict = {}
+    exec(compile(generated, "head.py", "exec"), namespace)
+
+    assert namespace["SIZE"] == 8
+    assert type(namespace["SIZE"]).__name__ == INTEGER, "the prelude is still there and still binds Sage's Integer"
+
+
+def test_the_head_keeps_its_meaning_and_not_just_its_legality(tmp_path: Path) -> None:
+    r"""Both head statements mean something the prelude must not take.
+
+    A string literal is the docstring only while it is the first
+    statement, so an import above it leaves ``__doc__`` empty without
+    any error to say so.  ``annotations`` is the directive that makes an
+    annotation a string rather than an expression evaluated at
+    definition, so the module's own reading of ``Undefined`` -- a name
+    nothing binds -- is what shows the directive still governs the
+    lowered module.
+    """
+    source = tmp_path / "governed.sage"
+    source.write_text(
+        textwrap.dedent(
+            """\
+            r'''The docstring.'''
+
+            from __future__ import annotations
+
+            SIZE = 2^3
+
+
+            def scale(n: Undefined) -> Undefined:
+                return n * SIZE
+            """
+        )
+    )
+    from sageparse.build import lower_file
+
+    generated = lower_file(source, tmp_path / "governed.py").read_text()
+    namespace: dict = {}
+    exec(compile(generated, "governed.py", "exec"), namespace)
+
+    assert namespace["__doc__"] == "The docstring."
+    assert namespace["scale"].__annotations__ == {"n": "Undefined", "return": "Undefined"}
+    assert namespace["scale"](2) == 16
+
+
+def test_a_modules_own_bindings_are_not_dependencies(tmp_path: Path) -> None:
+    r"""A name the module binds itself is the module's, not a Sage import.
+
+    The prelude is a dependency claim: a built module needs the Sage
+    libraries it actually references.  A module that assigns ``matrix``,
+    or defines its own ``factorial``, or names a parameter ``matrix``,
+    has bound that name itself — importing the Sage object those
+    bindings replace adds a dependency the module does not have, and
+    puts names in ``__sageparse_runtime_names__`` that the runtime
+    namespace never supplies to it.  What decides is scope resolution,
+    not identifier occurrence: only a read that resolves to a name the
+    module never binds reaches the prelude.
+    """
+    source = tmp_path / "shadow.sage"
+    source.write_text(
+        textwrap.dedent(
+            """\
+            SIZE = 2^3
+            matrix = [[SIZE]]
+
+
+            def factorial(n):
+                return n
+
+
+            COUNT = factorial(SIZE)
+
+
+            def scale(matrix):
+                return [entry * SIZE for entry in matrix[0]]
+            """
+        )
+    )
+    from sageparse.build import lower_file
+
+    generated = lower_file(source, tmp_path / "shadow.py").read_text()
+    assert "sage.matrix" not in generated, "an assignment target and a parameter are bindings, not references"
+    assert "sage.functions" not in generated, "the module's own factorial replaces Sage's"
+    assert "from sage.rings.integer import Integer" in generated, "2^3 emits Integer, so its import belongs"
+
+    namespace: dict = {}
+    exec(compile(generated, "<shadow>", "exec"), namespace)
+    assert namespace["__sageparse_runtime_names__"] == frozenset({"Integer"})
+    assert namespace["COUNT"] == 8, "the module's factorial is the identity, not Sage's 40320"
+    assert namespace["scale"]([[2, 3]]) == [16, 24]
 
 
 def test_every_emitted_name_is_bound_by_both_frontends() -> None:
@@ -372,6 +493,118 @@ def test_the_literal_constructors_build_sage_numbers(tmp_path: Path) -> None:
     # equal to them; the point is the type, not float tolerance.
     assert namespace["REAL"] + namespace["REAL"] == 3
     assert namespace["IMAGINARY"] ** 2 == -4
+
+
+# ---------------------------------------------------------------------------
+# One meaning across the frontends
+# ---------------------------------------------------------------------------
+
+# Source that only the installed dialect can read correctly: ``2k`` is a
+# product exactly when implicit multiplication is on, and ``{1, 3}`` is a
+# Sage ``Set`` exactly when the research rules are registered.
+DIALECT_SOURCE = textwrap.dedent(
+    """\
+    def double(k):
+        return 2k
+
+
+    PAIR = {1, 3}
+    """
+)
+
+
+@pytest.fixture
+def research_dialect() -> Iterator[None]:
+    """The research dialect installed, with the product mode restored after."""
+    import sageparse.preparser.research  # noqa: F401 — registering the dialect is the point
+    from sageparse.preparser import implicit_multiplication
+
+    previous = implicit_multiplication(True)
+    yield
+    implicit_multiplication(previous)
+
+
+def _session_meaning(source: str) -> dict:
+    """What a Sage session makes of ``source``.
+
+    ``sage-preparse`` emits ``preparse_file``'s output under the whole
+    ``sage.all_cmdline`` namespace; this is that script, executed.
+    """
+    from sageparse.preparser import preparse_file
+
+    namespace: dict = {}
+    exec(compile("from sage.all_cmdline import *\n" + preparse_file(source), "<session>", "exec"), namespace)
+    return namespace
+
+
+def _imported_meaning(source: str, directory: Path, stem: str) -> dict:
+    """What the importer makes of ``source``, through a real ``import``."""
+    import importlib
+
+    import sageparse.preparser.importer  # noqa: F401 — installs the finder
+
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{stem}.sage").write_text(source)
+    sys.path.insert(0, str(directory))
+    importlib.invalidate_caches()
+    try:
+        return dict(vars(importlib.import_module(stem)))
+    finally:
+        sys.path.remove(str(directory))
+        sys.modules.pop(stem, None)
+
+
+def _built_meaning(source: str, directory: Path, stem: str) -> dict:
+    """What a built module makes of ``source``: the generated ``.py``, executed."""
+    from sageparse.build import lower_file
+
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{stem}.sage").write_text(source)
+    generated = lower_file(directory / f"{stem}.sage", directory / "built" / f"{stem}.py").read_text()
+    namespace: dict = {}
+    exec(compile(generated, f"{stem}.py", "exec"), namespace)
+    return namespace
+
+
+def test_one_source_means_the_same_in_every_frontend(research_dialect: None, tmp_path: Path) -> None:
+    r"""The installed dialect governs every frontend, not only the session.
+
+    The session preparser, the importer, and the build frontend read the
+    same ``.sage`` source; the dialect — registered extensions and the
+    product mode — is one setting, so the source has one meaning.  A
+    frontend lowering with its own settings would hand back a Python
+    ``set`` where the session hands back a Sage ``Set`` (no
+    ``cardinality``), or refuse ``2k`` where the session multiplies, and
+    the same file would change meaning with the road taken to it.
+    """
+    meanings = {
+        "session": _session_meaning(DIALECT_SOURCE),
+        "imported": _imported_meaning(DIALECT_SOURCE, tmp_path / "imported", "frontends_dialect"),
+        "built": _built_meaning(DIALECT_SOURCE, tmp_path / "building", "frontends_dialect"),
+    }
+    for frontend, meaning in meanings.items():
+        assert meaning["double"](21) == 42, f"{frontend}: 2k is twice k under the dialect"
+        assert meaning["PAIR"].cardinality() == 2, f"{frontend}: {{1, 3}} is a Sage Set under the dialect"
+    assert meanings["session"]["PAIR"] == meanings["imported"]["PAIR"] == meanings["built"]["PAIR"]
+
+
+def test_every_frontend_refuses_what_the_dialect_refuses(core_defaults: None, tmp_path: Path) -> None:
+    r"""With implicit multiplication off, ``2x`` is a syntax error everywhere.
+
+    Sage's own default refuses ``2x`` and the session starts there.  The
+    importer and the build frontend read the same setting: a frontend
+    that quietly multiplied would give the one source a second meaning,
+    and would do it silently.
+    """
+    source = "y = 2x\n"
+    from sageparse.preparser import preparse_file
+
+    with pytest.raises(SyntaxError):
+        compile(preparse_file(source), "<session>", "exec")
+    with pytest.raises(SyntaxError):
+        _imported_meaning(source, tmp_path / "imported", "frontends_refused")
+    with pytest.raises(SyntaxError):
+        _built_meaning(source, tmp_path / "building", "frontends_refused")
 
 
 def test_the_suite_runs_in_a_sage_session() -> None:

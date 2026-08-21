@@ -378,7 +378,10 @@ def test_sage_cli_preparse_is_the_research_preparser(tmp_path: Path) -> None:
     source.write_text("def classify(x):\n    match x:\n        case -1:\n            return -1\n        case _:\n            return x\nS = {1, 2}\n")
 
     subprocess.run(
-        [os.environ.get("SAGE_BIN", "sage"), "--preparse", source.name],
+        # The sage profile binds the driver through the validated SAGE_BIN;
+        # a bare-`sage` PATH fallback here would let the proof run under an
+        # interpreter nobody validated, so its absence is a loud KeyError.
+        [os.environ["SAGE_BIN"], "--preparse", source.name],
         cwd=tmp_path,
         check=True,
         capture_output=True,

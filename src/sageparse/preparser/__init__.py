@@ -109,6 +109,23 @@ def implicit_multiplication(enable: bool = True) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# The installed dialect, applied to a whole module
+# ---------------------------------------------------------------------------
+
+
+def lower_module(source: str) -> str:
+    r"""Lower one whole ``.sage`` module under the installed dialect.
+
+    The importer and the build frontend compile through this, and
+    :func:`preparse` applies the same registered extensions and product
+    mode cell by cell, so one source has one meaning no matter which
+    frontend reads it.  The line protocols stay out: a module is
+    language, not a session transcript.
+    """
+    return lower(source, products=_products, extensions=tuple(_extensions)).python
+
+
+# ---------------------------------------------------------------------------
 # Line protocols around the compiler
 # ---------------------------------------------------------------------------
 

@@ -15,18 +15,23 @@ that is fundamental — Python's import machinery is documented as
 extensible to other source languages, and the compiler already does the
 only Sage-specific part.
 
-So this owns nothing but source recognition and lowering.  Python keeps
-module semantics: :class:`~importlib.machinery.ModuleSpec`,
+So this owns source recognition, lowering, and the runtime prelude.
+Python keeps module semantics: :class:`~importlib.machinery.ModuleSpec`,
 ``sys.modules``, packages, relative imports, cycles, and ``reload`` all
 behave as they do for ``.py``, because :class:`SageLoader` subclasses
-:class:`importlib.machinery.SourceFileLoader` and overrides only
-``source_to_code``.  Bytecode caching comes with it, so ``__pycache__``
-holds the compiled form and a file is re-lowered only when it changes.
+:class:`importlib.machinery.SourceFileLoader` and overrides exactly two
+of its steps.  ``source_to_code`` lowers Sage source before compiling
+it, and bytecode caching comes with that, so ``__pycache__`` holds the
+compiled form and a file is re-lowered only when it changes.
+``exec_module`` seeds the fresh module namespace with the runtime
+prelude before the body runs — which is what keeps the author's line
+numbers, since nothing is prepended to the source — and afterwards
+records the prelude bindings the body left standing as
+``__sageparse_runtime_names__`` on the module.
 
-A lowered module is given the compiler's runtime prelude — the names the
-lowering emits, and no more.  It is not given ``sage.all``: a module
-states its own mathematical imports, exactly as a ``.py`` module in Sage
-does.  ``__init__.sage`` makes a package.
+The prelude is the names the lowering emits, and no more.  A module is
+not given ``sage.all``: it states its own mathematical imports, exactly
+as a ``.py`` module in Sage does.  ``__init__.sage`` makes a package.
 """
 
 from __future__ import annotations
@@ -41,8 +46,7 @@ from os import PathLike, fspath
 from pathlib import Path
 from types import CodeType, ModuleType
 
-from sageparse import lower
-from sageparse.preparser import runtime_namespace
+from sageparse.preparser import lower_module, runtime_namespace
 
 SUFFIX = ".sage"
 
@@ -66,7 +70,7 @@ class SageLoader(SourceFileLoader):
         # `filename` is the .sage file, so a traceback names the author's
         # file; the lowerings preserve line geometry, so the line numbers
         # in it are the author's lines too.
-        return compile(lower(source).python, filename, "exec", dont_inherit=True, optimize=_optimize)
+        return compile(lower_module(source), filename, "exec", dont_inherit=True, optimize=_optimize)
 
     def exec_module(self, module: ModuleType) -> None:
         prelude = runtime_namespace()

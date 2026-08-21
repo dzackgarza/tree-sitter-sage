@@ -18,7 +18,7 @@ need this compiler, or the preparser, or the REPL layer, at run time.
 Only building needs them.
 
 Source locations are the one thing this frontend gives up.  The prelude
-has to bind its names before module-level code runs, so it goes at the
+has to bind its names before module-level code runs, so it goes near the
 top and shifts every following line; a traceback in a built module
 reports positions in the generated ``.py``.  That is the same trade a
 built Cython module makes, and it is why the importer exists for
@@ -28,27 +28,59 @@ development: work against ``.sage`` locations, ship the artifact.
 from __future__ import annotations
 
 import ast
+import symtable
 from pathlib import Path
 
-from sageparse import lower
-from sageparse.preparser import runtime_imports
+from sageparse.preparser import lower_module, runtime_imports
 
 SUFFIX = ".sage"
 
 _HEADER = "# Generated from {source} by sageparse. Do not edit; edit the .sage source.\n"
 
 
+def _module_free_reads(python: str) -> set[str]:
+    """Names the module reads from its global scope and never binds there.
+
+    What decides is scope resolution, not identifier occurrence, so the
+    line is drawn by ``symtable`` -- the same pass CPython compiles
+    with.  A read counts only where it resolves to the module's global
+    namespace: module-level loads and ``is_global`` reads in nested
+    scopes.  A parameter, a local, or a closure cell named ``matrix``
+    resolves inside its own function and never reaches the prelude.
+    Subtracted are the names the module binds at global scope itself --
+    assignments, ``def``/``class`` statements, imports, and ``global``
+    targets in nested scopes -- because a prelude import a module-own
+    binding replaces is a dependency the module does not have.
+    """
+    module = symtable.symtable(python, "<lowered>", "exec")
+    reads: set[str] = set()
+    bound: set[str] = set()
+    tables = [module]
+    while tables:
+        table = tables.pop()
+        for symbol in table.get_symbols():
+            if not symbol.is_global():
+                continue
+            if symbol.is_referenced():
+                reads.add(symbol.get_name())
+            if symbol.is_assigned() or symbol.is_imported():
+                bound.add(symbol.get_name())
+        tables.extend(table.get_children())
+    return reads - bound
+
+
 def _prelude(python: str) -> str:
     """Import lines for exactly the runtime names this output references.
 
-    The names come off the parse tree, not out of the text.  A word
+    The names come off the compiled scopes, not out of the text.  A word
     search cannot tell a reference from prose, so a module whose
     docstring said "matrix" used to gain a Sage matrix dependency for
     saying it -- which contradicts the whole reason to build ahead of
-    time.  ``ast`` already draws that line, and draws it in the same
-    place Python does.
+    time.  Binding context matters the same way: a module that assigns
+    ``matrix`` or takes it as a parameter has its own ``matrix``, and
+    importing Sage's underneath it is the same spurious dependency.
     """
-    referenced = {node.id for node in ast.walk(ast.parse(python)) if isinstance(node, ast.Name)}
+    referenced = _module_free_reads(python)
     imports = runtime_imports()
     names = sorted(referenced & imports.keys())
     if not names:
@@ -57,19 +89,48 @@ def _prelude(python: str) -> str:
     return f"{bindings}__sageparse_runtime_names__ = frozenset({names!r})\n"
 
 
+def _header_end(python: str) -> int:
+    """Lines of ``python`` the prelude has to stay below.
+
+    Two module statements own the top of a file and cannot be pushed
+    down.  A ``from __future__ import`` is a compiler directive Python
+    accepts only above every other statement, so an import placed over
+    one is a syntax error rather than a lowered module.  A string
+    literal is the docstring only while it is the first statement, so an
+    import placed over it silently empties ``__doc__``.  Both are
+    measured off the parsed statements, not the text: the generated
+    header comment and any blank line are not statements, and neither
+    displaces a future statement.
+    """
+    module = ast.parse(python)
+    end = 0
+    for position, statement in enumerate(module.body):
+        docstring = position == 0 and isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str)
+        future = isinstance(statement, ast.ImportFrom) and statement.module == "__future__"
+        if not (docstring or future):
+            break
+        assert statement.end_lineno is not None, "a parsed statement has an end position"
+        end = statement.end_lineno
+    return end
+
+
 def lower_source(source: str) -> str:
     r"""Lower Sage source to a standalone Python module.
 
     The prelude must precede the module body, because module-level code
-    calls the names it binds while the module is executing.  That shifts
-    the body down by the number of prelude lines, which is why a built
-    module's positions are its own and not the ``.sage`` file's.
+    calls the names it binds while the module is executing.  It follows
+    the docstring and the ``__future__`` block, which are the module's
+    own head and stay where their author wrote them.  Everything below
+    shifts by the number of prelude lines, which is why a built module's
+    positions are its own and not the ``.sage`` file's.
     """
-    lowered = lower(source).python
+    lowered = lower_module(source)
     prelude = _prelude(lowered)
     if not prelude:
         return lowered
-    return f"{prelude}{lowered}"
+    lines = lowered.splitlines(keepends=True)
+    head = _header_end(lowered)
+    return f"{''.join(lines[:head])}{prelude}{''.join(lines[head:])}"
 
 
 def lower_file(source: Path, target: Path) -> Path:

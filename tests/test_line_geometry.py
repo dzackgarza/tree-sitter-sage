@@ -7,6 +7,10 @@ wrong one; the build backend relies on it to keep the offset it does
 introduce equal to the prelude and nothing else.
 
 These are Sage-free: they test the compiler core, not the runtime.
+Whether the padded lowering still computes the right value is a claim
+about the real prelude, so it is proved in ``test_sage_modules`` —
+``test_a_sage_package_imports_like_any_other`` imports a multi-line
+ellipsis through the importer under real Sage and checks the result.
 """
 
 from sageparse import lower
@@ -25,13 +29,6 @@ def test_multi_line_constructs_keep_their_line_count() -> None:
         result = lower(source)
         assert result.python.count("\n") == source.count("\n"), name
         compile(result.python, "<cell>", "exec")
-
-
-def test_padding_does_not_change_meaning() -> None:
-    result = lower("v = [1,\n     ..,\n     4]\n")
-    namespace: dict = {"Integer": int, "ellipsis_range": lambda a, _e, b: list(range(a, b + 1))}
-    exec(result.python, namespace)
-    assert namespace["v"] == [1, 2, 3, 4]
 
 
 def test_a_statement_after_a_collapsing_construct_keeps_its_line() -> None:
