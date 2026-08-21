@@ -17,12 +17,7 @@ authors = [
   { name = "Max Brunsfeld", email = "maxbrunsfeld@gmail.com" },
   { name = "Amaan Qureshi", email = "amaanq12@gmail.com" },
 ]
-# Sage's own floor. The source uses no syntax newer than this; the
-# previous >=3.14 came from the example pyproject in ai-review-ci's
-# setup help, and nothing -- not the code, not the QC preflight --
-# required it. It did rule out every prebuilt Sage, since 3.14 support
-# is recent enough that packaged builds are still behind.
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = ["tree-sitter"]
 license.text = "MIT"
 readme = "README.md"
