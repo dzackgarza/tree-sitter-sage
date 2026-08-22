@@ -50,12 +50,13 @@ test-ci:
 # `sagemath/sagemath` is the distribution build, driver script included.
 # SAGE_ROOT is baked in at configure time, so the tree is restored to the
 # same absolute path it was configured at rather than relocated.  The tag
-# is pinned to the version this repo is developed against, so the gate and
-# the desk run the same Sage.
+# is `develop`, which follows Sage's development branch: this grammar
+# tracks the latest Sage dev, so the gate must break when Sage's syntax
+# moves rather than a release later.
 ci-provision-sage:
     #!/usr/bin/env bash
     set -euo pipefail
-    docker create --name sage-dist sagemath/sagemath:10.10.beta0
+    docker create --name sage-dist sagemath/sagemath:develop
     sudo install -d -o "$(id -un)" -g "$(id -gn)" /home/sage
     docker cp sage-dist:/home/sage/sage /home/sage/sage
     docker rm sage-dist
