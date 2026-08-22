@@ -47,23 +47,30 @@ test-ci:
 #            through the distribution's driver script (`--preparse`,
 #            `-python`, `-pip`), and that script is not in the package.
 #
-# `sagemath/sagemath` is the distribution build, driver script included.
-# SAGE_ROOT is baked in at configure time, so the tree is restored to the
-# same absolute path it was configured at rather than relocated.  The tag
-# is pinned to the version this repo is developed against, so the gate and
-# the desk run the same Sage.
+# ghcr.io/dzackgarza/sage:develop is the research Sage environment, published
+# by the fork from the same `just research-environment-sync` the desk runs. It
+# is the Sage this grammar is written against -- upstream's distribution image
+# is a different build on Python 3.12, and rejects anything requiring the 3.14
+# the fork pins. Every repository writing Sage against that fork pulls this one
+# build rather than compiling its own.
+#
+# SAGE_ROOT is baked in at configure time, so the tree is restored to /sage --
+# the path it was configured at -- rather than relocated.
+
+# CI: pull the research Sage environment and export SAGE_BIN.
 ci-provision-sage:
     #!/usr/bin/env bash
     set -euo pipefail
-    docker create --name sage-dist sagemath/sagemath:10.10.beta0
-    sudo install -d -o "$(id -un)" -g "$(id -gn)" /home/sage
-    docker cp sage-dist:/home/sage/sage /home/sage/sage
-    docker rm sage-dist
-    sage_bin=/home/sage/sage/sage
-    # The sage profile installs nothing, so this is where the project has to
-    # reach Sage's own interpreter: the suite imports sageparse under it.
+    docker create --name sage-env ghcr.io/dzackgarza/sage:develop
+    sudo install -d -o "$(id -un)" -g "$(id -gn)" /sage
+    docker cp sage-env:/sage/. /sage/
+    docker rm sage-env
+    sage_bin=/sage/.venv/bin/sage
+    # The suite runs under Sage's own interpreter; the image carries the
+    # research environment but not a test runner.
     "$sage_bin" -pip install --quiet pytest coverage
-    "$sage_bin" -pip install --quiet -e .
+    # The checkout under test, over whatever grammar the image carries.
+    "$sage_bin" -pip install --quiet --no-deps -e .
     # Installing the distribution is not installing the preparser.
     # `sageparse.preparser` replaces Sage's entrypoints when it is
     # imported, and `sage --preparse` is a fresh process that imports
