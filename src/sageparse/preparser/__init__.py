@@ -29,7 +29,7 @@ from sage.repl import interpreter as sage_interpreter
 from sage.repl import preparse as sage_preparse
 from sage.repl.load import load_wrap
 
-from sageparse import LoweringRule, Products, lower
+from sageparse import LoweringRule, Products, lower_python
 from sageparse.runtime import IMPORTS as _CORE_IMPORTS
 from sageparse.runtime import NAMESPACE as _CORE_NAMESPACE
 
@@ -152,12 +152,12 @@ def preparse(
         line = _strip_prompts(line)
     if do_time:
         line = _wrap_time_statements(line)
-    return lower(
+    return lower_python(
         line,
         numbers="wrapped" if numeric_literals else "raw",
         products=_products,
         extensions=tuple(_extensions),
-    ).python
+    )
 
 
 def preparse_file(contents: str, globals: dict | None = None, numeric_literals: bool = True) -> str:
