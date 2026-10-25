@@ -20,6 +20,12 @@ these are lowering rules only:
 lowers it to ``**``, and what ``R**n`` means is decided by the ring's
 ``__pow__`` — a runtime question for whoever owns the ring, not a
 preparser one.
+
+``C^k(X, Y)`` and ``ell^p(RR)`` are the exceptions.  Call binds tighter
+than power, so the parse of ``C^k(X, Y)`` is ``C^(k(X, Y))``, not
+``(C^k)(X, Y)``.  The space constructor cannot see that at runtime.  This
+dialect rewrites ``C^k(...)`` to ``C(k, ...)`` and ``ell^p(...)`` to
+``ell(p, ...)``.
 """
 
 from __future__ import annotations
@@ -274,12 +280,90 @@ def _lower_assignment(node: Node, context: Context) -> str | None:
     return pad_to_source_lines(rebuilt, node, context)
 
 
+def _lower_float(node: Node, context: Context) -> str | None:
+    r"""Lower a decimal literal to an explicit real approximation.
+
+    The research preamble reserves ``RealNumber`` for an exact element of
+    the mathematical real field.  A decimal literal is finite-precision
+    input, so it is instead constructed as a ``RealApproximation``.
+    """
+    if context.numbers == "raw" or context.in_case_pattern:
+        return None
+    text = context.text(node)
+    if text[-1] in "jJ":
+        return f"ComplexNumber(0, '{text[:-1]}')"
+    return f"RealApproximation('{text}')"
+
+
+_CARET_OPERATORS = {"^": "**", "^^": "^", "^=": "**=", "^^=": "^="}
+
+
+_POWER_CALL_CONSTRUCTORS = {b"C", b"ell"}
+
+
+def _lower_mapping_space_power(node: Node, context: Context) -> str | None:
+    r"""Lower ``C^k(X, Y)`` to ``C(k, X, Y)`` and ``ell^p(RR)`` to ``ell(p, RR)``.
+
+    The call ``k(X, Y)`` is the exponent only because call binds tighter
+    than ``^``.  The left identifier is the space constructor.
+    """
+    operator = node.child_by_field_name("operator")
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    if operator is None or operator.text != b"^":
+        return None
+    if left is None or left.type != "identifier" or left.text not in _POWER_CALL_CONSTRUCTORS:
+        return None
+    if right is None or right.type != "call":
+        return None
+    regularity = right.child_by_field_name("function")
+    arguments = right.child_by_field_name("arguments")
+    if regularity is None or arguments is None or arguments.type != "argument_list":
+        return None
+    spaces = named_elements(arguments)
+    if not spaces:
+        return None
+    constructor = left.text.decode()
+    pieces = [lower_node(regularity, context), *(lower_node(space, context) for space in spaces)]
+    return f"{constructor}({', '.join(pieces)})"
+
+
+def _lower_binary_operator(node: Node, context: Context) -> str | None:
+    mapping_space = _lower_mapping_space_power(node, context)
+    if mapping_space is not None:
+        return mapping_space
+    operator = node.child_by_field_name("operator")
+    if operator is None or operator.text is None:
+        return None
+    replacement = _CARET_OPERATORS.get(operator.text.decode())
+    if replacement is None:
+        return None
+    pieces = []
+    cursor = node.start_byte
+    for child in node.children:
+        pieces.append(context.source[cursor : child.start_byte].decode("utf-8"))
+        if child.id == operator.id:
+            pieces.append(replacement)
+        else:
+            pieces.append(lower_node(child, context))
+        cursor = child.end_byte
+    pieces.append(context.source[cursor : node.end_byte].decode("utf-8"))
+    return "".join(pieces)
+
+
 EXTENSION: dict[str, LoweringRule] = {
+    "float": _lower_float,
     "set": _lower_set,
     "set_comprehension": _lower_set_comprehension,
     "sage_generator_assignment": _lower_generator_assignment,
     "assignment": _lower_assignment,
+    "binary_operator": _lower_binary_operator,
 }
 
 # Names the extension's lowerings emit into generated Python.
-RUNTIME_NAMES: tuple[str, ...] = ("Set", "ImageSet", "ConditionSet")
+RUNTIME_NAMES: tuple[str, ...] = (
+    "RealApproximation",
+    "Set",
+    "ImageSet",
+    "ConditionSet",
+)
