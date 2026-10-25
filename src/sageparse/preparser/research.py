@@ -13,6 +13,7 @@ rules live.
 
 from __future__ import annotations
 
+from sage.rings.real_mpfr import create_RealNumber as RealApproximation
 from sage.sets.condition_set import ConditionSet
 from sage.sets.image_set import ImageSet
 from sage.sets.set import Set
@@ -20,8 +21,14 @@ from sage.sets.set import Set
 from sageparse.extensions.research import EXTENSION, RUNTIME_NAMES
 from sageparse.preparser import implicit_multiplication, register_extension
 
-RUNTIME: dict[str, object] = {"Set": Set, "ImageSet": ImageSet, "ConditionSet": ConditionSet}
+RUNTIME: dict[str, object] = {
+    "RealApproximation": RealApproximation,
+    "Set": Set,
+    "ImageSet": ImageSet,
+    "ConditionSet": ConditionSet,
+}
 IMPORTS: dict[str, str] = {
+    "RealApproximation": "from sage.rings.real_mpfr import create_RealNumber as RealApproximation",
     "Set": "from sage.sets.set import Set",
     "ImageSet": "from sage.sets.image_set import ImageSet",
     "ConditionSet": "from sage.sets.condition_set import ConditionSet",

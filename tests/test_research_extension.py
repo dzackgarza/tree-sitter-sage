@@ -20,6 +20,10 @@ def test_extension_lowers_set_literals() -> None:
     assert _research("s = {1, 2}\n") == "s = Set([Integer(1), Integer(2)])\n"
 
 
+def test_research_decimal_literals_are_explicit_approximations() -> None:
+    assert _research("x = 1.25\n") == "x = RealApproximation('1.25')\n"
+
+
 def test_extension_lowers_builders() -> None:
     assert _research("s = {x^2 | x in D}\n") == ("s = ImageSet(lambda x: x**Integer(2), D)\n")
     assert _research("s = {x in D | P(x)}\n") == ("s = ConditionSet(D, lambda x: P(x))\n")
@@ -118,3 +122,22 @@ def test_multiline_set_with_interior_comments_lowers_compilably() -> None:
     )
     compile(result.python, "<cell>", "exec")
     assert "#" not in result.python.splitlines()[0][result.python.find("Set") :]
+
+
+def test_extension_lowers_mapping_spaces_written_as_c_to_the_k() -> None:
+    assert _research("C^k(X, Y)\n") == "C(k, X, Y)\n"
+    assert _research("C^k(X)\n") == "C(k, X)\n"
+    assert _research("C^2(RR, RR)\n") == "C(Integer(2), RR, RR)\n"
+    assert _research("C^Infinity(RR)\n") == "C(Infinity, RR)\n"
+
+
+def test_extension_lowers_sequence_spaces_written_as_ell_to_the_p() -> None:
+    assert _research("ell^p(RR)\n") == "ell(p, RR)\n"
+    assert _research("ell^2(RR)\n") == "ell(Integer(2), RR)\n"
+    assert _research("ell^Infinity(RR)\n") == "ell(Infinity, RR)\n"
+
+
+def test_extension_leaves_ordinary_powers_as_exponentiation() -> None:
+    assert _research("x^f(y)\n") == "x**f(y)\n"
+    assert _research("C^k\n") == "C**k\n"
+    assert _research("ell^p\n") == "ell**p\n"
