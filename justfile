@@ -10,7 +10,7 @@ ai_review_ci_default_branch := "main"
 default:
     @just --list
 
-[doc("Commit-tier QC: committed parser tables must match a fresh generate,")]
+[doc("Commit-tier QC: committed parser tables must match a fresh generate, then the grammar's corpus/highlight suites, then central Python QC.")]
 test-commit:
     tree-sitter generate
     if ! git diff --quiet -- src/parser.c src/grammar.json src/node-types.json tree-sitter.json; then echo "ERROR: committed parser is stale; run tree-sitter generate (and build --wasm) and commit." >&2; exit 1; fi
@@ -44,7 +44,7 @@ ci-provision-sage:
     "$sage_bin" -c "import sys; print('sage', sys.version)"
     "$sage_bin" -python -c "import sage.repl.preparse, sageparse.preparser; assert sage.repl.preparse.preparse is sageparse.preparser.preparse, 'the preparser did not install'"
 
-[doc("Refresh the live consumers.  The Python installs are editable, so their")]
+[doc("Refresh the live consumers.")]
 refresh-local:
     sage -pip install --quiet --force-reinstall --no-deps -e .
     uv pip install -p ~/gitclones/sage-lsp-server/.venv --quiet --force-reinstall --no-deps -e .
