@@ -212,6 +212,7 @@ module.exports = grammar(composed({
     ),
 
     import_statement: $ => seq(
+      optional('lazy'),
       'import',
       $._import_list,
     ),
@@ -234,6 +235,7 @@ module.exports = grammar(composed({
     ),
 
     import_from_statement: $ => seq(
+      optional('lazy'),
       'from',
       field('module_name', choice(
         $.relative_import,
@@ -623,7 +625,7 @@ module.exports = grammar(composed({
       $.true,
       $.false,
       $.none,
-      seq(optional('-'), choice($.integer, $.float)),
+      seq(optional(choice('+', '-')), choice($.integer, $.float)),
       $.complex_pattern,
       $.dotted_name,
       '_',
@@ -681,7 +683,7 @@ module.exports = grammar(composed({
     ),
 
     complex_pattern: $ => prec(1, seq(
-      optional('-'),
+      optional(choice('+', '-')),
       choice($.integer, $.float),
       choice('+', '-'),
       choice($.integer, $.float),
@@ -1299,7 +1301,7 @@ module.exports = grammar(composed({
         $.identifier,
       )),
       alias(
-        choice('type', 'match'),
+        choice('type', 'match', 'lazy'),
         $.identifier,
       ),
     ),

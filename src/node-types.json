@@ -1334,6 +1334,10 @@
         "required": false,
         "types": [
           {
+            "type": "+",
+            "named": false
+          },
+          {
             "type": "-",
             "named": false
           },
@@ -4134,6 +4138,10 @@
   },
   {
     "type": "lambda",
+    "named": false
+  },
+  {
+    "type": "lazy",
     "named": false
   },
   {

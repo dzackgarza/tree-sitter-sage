@@ -150,6 +150,18 @@
       "type": "SEQ",
       "members": [
         {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "lazy"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
           "type": "STRING",
           "value": "import"
         },
@@ -233,6 +245,18 @@
     "import_from_statement": {
       "type": "SEQ",
       "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "lazy"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
         {
           "type": "STRING",
           "value": "from"
@@ -2417,8 +2441,17 @@
                 "type": "CHOICE",
                 "members": [
                   {
-                    "type": "STRING",
-                    "value": "-"
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "STRING",
+                        "value": "+"
+                      },
+                      {
+                        "type": "STRING",
+                        "value": "-"
+                      }
+                    ]
                   },
                   {
                     "type": "BLANK"
@@ -2866,8 +2899,17 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "STRING",
-                "value": "-"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": "+"
+                  },
+                  {
+                    "type": "STRING",
+                    "value": "-"
+                  }
+                ]
               },
               {
                 "type": "BLANK"
@@ -6501,6 +6543,10 @@
               {
                 "type": "STRING",
                 "value": "match"
+              },
+              {
+                "type": "STRING",
+                "value": "lazy"
               }
             ]
           },

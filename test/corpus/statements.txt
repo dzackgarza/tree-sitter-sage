@@ -1556,3 +1556,43 @@ def more_generic[T, *Ts, **P]():
                               (identifier)))))))))))))
       (return_statement
         (identifier)))))
+
+================================================================================
+Lazy imports and the contextual lazy keyword
+================================================================================
+
+lazy import a.b as c, d
+lazy from ..pkg import (a as b, c,)
+lazy from . import lazy
+import lazy
+from lazy import lazy as name
+lazy = 1
+lazy()
+lazy.attr
+
+--------------------------------------------------------------------------------
+
+(module
+  (import_statement
+    (aliased_import
+      (dotted_name (identifier) (identifier))
+      (identifier))
+    (dotted_name (identifier)))
+  (import_from_statement
+    (relative_import
+      (import_prefix)
+      (dotted_name (identifier)))
+    (aliased_import
+      (dotted_name (identifier))
+      (identifier))
+    (dotted_name (identifier)))
+  (import_from_statement
+    (relative_import (import_prefix))
+    (dotted_name (identifier)))
+  (import_statement (dotted_name (identifier)))
+  (import_from_statement
+    (dotted_name (identifier))
+    (aliased_import (dotted_name (identifier)) (identifier)))
+  (assignment (identifier) (integer))
+  (call (identifier) (argument_list))
+  (attribute (identifier) (identifier)))
