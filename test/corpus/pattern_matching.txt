@@ -1516,3 +1516,38 @@ match x:
             (identifier)))
         (block
           (pass_statement))))))
+
+================================================================================
+Unary-plus numeric literal patterns
+================================================================================
+
+match x:
+    case +1 | +2.5 | +3j:
+        pass
+    case +1 + 2j:
+        pass
+    case +1.5 - 2j:
+        pass
+    case {+4: y}:
+        pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (match_statement
+    (identifier)
+    (block
+      (case_clause
+        (case_pattern
+          (union_pattern (integer) (float) (integer)))
+        (block (pass_statement)))
+      (case_clause
+        (case_pattern (complex_pattern (integer) (integer)))
+        (block (pass_statement)))
+      (case_clause
+        (case_pattern (complex_pattern (float) (integer)))
+        (block (pass_statement)))
+      (case_clause
+        (case_pattern
+          (dict_pattern (integer) (case_pattern (dotted_name (identifier)))))
+        (block (pass_statement))))))

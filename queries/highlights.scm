@@ -123,6 +123,7 @@
   "if"
   "import"
   "lambda"
+  "lazy"
   "nonlocal"
   "pass"
   "print"
