@@ -40,9 +40,6 @@ _TIME_STATEMENT = re.compile(r"^(\s*)time +(\S[^\n]*)$", re.MULTILINE)
 _LOAD_ATTACH = re.compile(r"^(\s*)(load|attach) ([^(].*)$", re.MULTILINE)
 
 
-# ---------------------------------------------------------------------------
-# Dialect extensions
-# ---------------------------------------------------------------------------
 
 _extensions: list[Mapping[str, LoweringRule]] = []
 _runtime: dict[str, object] = dict(_CORE_NAMESPACE)
@@ -88,9 +85,6 @@ def runtime_names() -> tuple[str, ...]:
     return tuple(_runtime)
 
 
-# ---------------------------------------------------------------------------
-# Implicit multiplication, as a session setting
-# ---------------------------------------------------------------------------
 
 _products: Products = "explicit"
 
@@ -108,9 +102,6 @@ def implicit_multiplication(enable: bool = True) -> bool:
     return previous
 
 
-# ---------------------------------------------------------------------------
-# Line protocols around the compiler
-# ---------------------------------------------------------------------------
 
 
 def _strip_prompts(line: str) -> str:
@@ -165,26 +156,21 @@ def preparse_file(contents: str, globals: dict | None = None, numeric_literals: 
 
     The signature matches ``sage.repl.preparse.preparse_file``.  Bare
     ``load``/``attach`` directives are wrapped exactly as Sage wraps
-    them, and the ``time`` keyword is active.  ``globals`` and
+    them before lowering, so file-wide binding rules see both sides of
+    each directive. The ``time`` keyword is active.  ``globals`` and
     ``numeric_literals`` are accepted for the contract and unused: they
     served Sage's ``_sage_const_`` hoisting, which inline wrapping
     replaces without a change in meaning.
     """
     del globals, numeric_literals
     assert isinstance(contents, str), "preparse_file expects a string"
-    lines: list[str] = []
-    start = 0
-    for directive in _LOAD_ATTACH.finditer(contents):
-        lines += preparse(contents[start : directive.start()], do_time=True).splitlines()
-        lines.append(directive.group(1) + load_wrap(directive.group(3), directive.group(2) == "attach"))
-        start = directive.end()
-    lines += preparse(contents[start:], do_time=True).splitlines()
-    return "\n".join(lines)
+    contents = _LOAD_ATTACH.sub(
+        lambda directive: directive.group(1) + load_wrap(directive.group(3), directive.group(2) == "attach"),
+        contents,
+    )
+    return "\n".join(preparse(contents, do_time=True).splitlines())
 
 
-# ---------------------------------------------------------------------------
-# Installation
-# ---------------------------------------------------------------------------
 
 
 def install() -> None:
