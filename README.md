@@ -58,7 +58,9 @@ Importing installs `preparse`, `preparse_file`, and the `time`, `sage:`/`>>>`, `
 
 Non-standard notation is optional and modular.
 Each extension is one rule table under `sageparse.extensions`, plus the module under `sageparse.preparser` that registers it into a live session.
-`sageparse.extensions.research` is the catch-all for non-standard notation migrated upstream out of research use; it currently holds the set-builder forms.
+`sageparse.extensions.research` is the catch-all for non-standard notation migrated upstream out of research use; it includes set-builder forms and self-naming polynomial rings.
+
+Implicit generator declarations such as `R = ZZ[x,y]` are recognized only when the file's binding scan finds neither generator bound and the file contains no wildcard import (`from module import *`). A wildcard import can introduce arbitrary names at execution time, so ordinary indexing is preserved throughout such a file; the compiler never imports the module to determine its exports. Use `R.<x,y> = ZZ[x,y]` to declare generators explicitly in those files.
 
 The boundary is what a rule can decide from source text alone.
 `^` is exponentiation and lowers to `**`; what `R**n` then *means* is the ring's `__pow__`, so a session that wants `R^n` to build its own module overrides `__pow__` on that parent's class and needs nothing from the preparser.

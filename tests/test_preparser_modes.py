@@ -8,7 +8,10 @@ These pin the two real call shapes of the installed preparser:
   uses for ``.sage`` files (``time`` keyword active, no numeric wrapping).
 
 Plain-Python test file: source strings below pass only through the research
-``preparse`` under test.
+``preparse`` under test. The session namespace contains heterogeneous Sage
+parents, elements, functions and modules, and is built explicitly from
+used names (including research.RUNTIME and the top-level sage package
+needed by lowered load directives), not from globals().
 """
 
 import ast
@@ -38,16 +41,8 @@ from sage.all import (
 from sageparse import lower
 from sageparse.preparser import preparse, preparse_file, research
 
-# What an executed cell's namespace is: names bound to whatever objects the
-# cell builds.  ``Any`` is the honest element type -- the values are Sage
-# parents, elements, functions and modules with nothing in common -- and
-# naming it once keeps that admission in one place instead of at every use.
 type SessionNamespace = dict[str, Any]
 
-# The namespace an executed cell sees.  Built rather than taken from
-# ``globals()``, so every name here is a real use: the lowering's output
-# names ``Set``/``ImageSet``/``ConditionSet``, and the dialect declares
-# which those are, so that half comes from ``research.RUNTIME``.
 _NAMESPACE: SessionNamespace = {
     **research.RUNTIME,
     "QQ": QQ,
@@ -61,8 +56,6 @@ _NAMESPACE: SessionNamespace = {
     "factorial": factorial,
     "matrix": matrix,
     "walltime": walltime,
-    # ``load foo.sage`` lowers to a call through ``sage.repl.load``, so the
-    # executed source needs the top-level package name bound.
     "sage": sage,
 }
 
@@ -256,18 +249,17 @@ def test_source_map_generated_position_anchors_rebuilt_constructs() -> None:
 def test_source_map_distinguishes_generated_from_verbatim_text() -> None:
     result = lower("R.<x, y> = QQ[]\nq = zz\n")
 
-    # Inside the rebuilt generator statement: generated text.
     assert not result.source_map.exact_at_generated(1, 5)
-    # The untouched second line: verbatim author text.
     generated_column = result.python.split("\n")[1].find("zz")
     assert result.source_map.exact_at_generated(2, generated_column)
 
 
 def test_lint_sensitive_constructs_lower_to_ordinary_python() -> None:
-    # The construct list sage-lsp monkey-patches into pycodestyle
-    # (E201/E202/E225/E227/E231 suppressions around `R.<...>` and `^^`).
-    # Lowering removes the need for any of that: the output is ordinary
-    # Python that the stock toolchain parses.
+    r"""The construct list sage-lsp monkey-patches into pycodestyle
+    (E201/E202/E225/E227/E231 suppressions around `R.<...>` and `^^`).
+    Lowering removes the need for any of that: the output is ordinary
+    Python that the stock toolchain parses.
+    """
     for source in (
         "R.<x, y> = QQ[]",
         "R.< x , y > = QQ[]",
@@ -278,7 +270,8 @@ def test_lint_sensitive_constructs_lower_to_ordinary_python() -> None:
 
 
 def test_sage_34678_match_case_repro_executes() -> None:
-    # Upstream: patterns became Integer(1) calls, a TypeError at runtime.
+    r"""Upstream: patterns became Integer(1) calls, a TypeError at runtime.
+    """
     namespace = dict(_NAMESPACE)
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
@@ -290,8 +283,9 @@ def test_sage_34678_match_case_repro_executes() -> None:
 
 
 def test_sage_19088_multiline_generator_with_trailing_statement() -> None:
-    # Upstream: the regex generator rewrite broke on multiline
-    # constructors followed by `; A` (and carets inside string args).
+    r"""Upstream: the regex generator rewrite broke on multiline
+    constructors followed by `; A` (and carets inside string args).
+    """
     namespace = dict(_NAMESPACE)
     exec(
         preparse("A.<n> = PolynomialRing(QQ,\n                       sparse=False); B = 'n^2 * log(n)^QQ'\n"),
@@ -302,8 +296,9 @@ def test_sage_19088_multiline_generator_with_trailing_statement() -> None:
 
 
 def test_sage_33942_multiline_fstring_literal_lines_untouched() -> None:
-    # Upstream: literal lines inside multiline f-strings were rewritten
-    # (a bare `2` became `_sage_const_2` / `Integer(2)`).
+    r"""Upstream: literal lines inside multiline f-strings were rewritten
+    (a bare `2` became `_sage_const_2` / `Integer(2)`).
+    """
     namespace = dict(_NAMESPACE)
     exec(
         preparse('value = f"""\na: {1:0.2f}\na: 2\na: 3\n"""'),
@@ -334,11 +329,12 @@ def test_version_literal_feature_executes() -> None:
 
 
 def test_generator_ellipsis_expands_at_preparse() -> None:
-    # The preparser owns the string manipulation: the endpoints
-    # determine the range textually, so downstream code sees only real
-    # names and stays focused on the mathematics.  (The compiler once
-    # silently dropped the slot; stock Sage leaves a literal 'Ellipsis'
-    # for constructors to interpret.)
+    r"""The preparser owns the string manipulation: the endpoints
+    determine the range textually, so downstream code sees only real
+    names and stays focused on the mathematics.  (The compiler once
+    silently dropped the slot; stock Sage leaves a literal 'Ellipsis'
+    for constructors to interpret.)
+    """
     a_names = ", ".join(f"'a{i}'" for i in range(1, 9))
     a_targets = ", ".join(f"a{i}" for i in range(1, 9))
     assert preparse("L.<a1,...,a8> = IntegralLattice('E8')") == (f"L = IntegralLattice('E8', names=({a_names},)); ({a_targets},) = L._first_ngens(8)")
@@ -388,3 +384,18 @@ def test_sage_cli_preparse_is_the_research_preparser(tmp_path: Path) -> None:
     assert "Set([Integer(1), Integer(2)])" in generated, "brace notation is this preparser's; Sage's own leaves a set literal"
     assert "case -1:" in generated and "_sage_const_" not in generated, "Sage's own preparser rewrites integer patterns into invalid syntax"
     ast.parse(generated)
+
+
+def test_preparse_file_preserves_star_import_index_across_load(tmp_path: Path) -> None:
+    loaded = tmp_path / "loaded.sage"
+    loaded.write_text("w = 2^3\n")
+    contents = (
+        'from math import *\nS = {pi: "ordinary subscript"}\n'
+        f"load {loaded}\n"
+        "y = S[pi]\nR.<x,z> = ZZ[x,z]\n"
+    )
+    namespace = dict(_NAMESPACE)
+    exec(preparse_file(contents), namespace)
+    assert namespace["y"] == "ordinary subscript"
+    assert namespace["w"] == 8
+    assert namespace["R"].gens() == (namespace["x"], namespace["z"])

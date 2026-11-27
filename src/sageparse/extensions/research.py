@@ -40,9 +40,6 @@ from sageparse import (
     splice,
 )
 
-# ---------------------------------------------------------------------------
-# Brace notation: sets and the research set-builder forms
-# ---------------------------------------------------------------------------
 
 
 def _and_chain(node: Node) -> list[Node]:
@@ -80,7 +77,13 @@ def _top_bitwise_or(node: Node) -> tuple[Node, Node] | None:
 
 
 def _lower_builder(element: Node, context: Context) -> str | None:
-    """Lower a one-element brace body if it is a set-builder form."""
+    """Lower a one-element brace body if it is a set-builder form.
+
+    Form A, `{image | x in domain [and P...]}`, has the shape
+    comparison(bitor(image, x), in, domain) wrapped in an and chain.
+    In Form B, `{x in domain | P [and Q...]}`, the bar lands inside the
+    second operand; further comparisons continue the comparison chain.
+    """
     chain = _and_chain(element)
     head, conditions = chain[0], chain[1:]
     comparison = _comparison_chain(head)
@@ -90,8 +93,6 @@ def _lower_builder(element: Node, context: Context) -> str | None:
 
     condition_text = " and ".join(lower_node(condition, context) for condition in conditions)
 
-    # Form A — `{image | x in domain [and P...]}`:
-    # comparison(bitor(image, x), in, domain) [wrapped in `and` chain].
     if len(operands) == 2 and operators == ["in"]:
         split = _top_bitwise_or(operands[0])
         if split is not None and split[1].type == "identifier":
@@ -105,9 +106,6 @@ def _lower_builder(element: Node, context: Context) -> str | None:
                 return domain if condition_text else f"Set({domain})"
             return f"ImageSet(lambda {variable_text}: {image_text}, {domain})"
 
-    # Form B — `{x in domain | P [and Q...]}`: the bar lands inside the
-    # second operand, and a predicate containing comparisons continues
-    # the chain: comparison(x, in, bitor(domain, P), op, rest...).
     if operands[0].type == "identifier" and operators[0] == "in":
         split = _top_bitwise_or(operands[1])
         if split is not None:
@@ -140,9 +138,6 @@ def _lower_set_comprehension(node: Node, context: Context) -> str:
     return f"Set([{inner[1:-1]}])"
 
 
-# ---------------------------------------------------------------------------
-# Polynomial rings: the ring names its own generators
-# ---------------------------------------------------------------------------
 
 
 def _subscript_names(node: Node, context: Context) -> list[str] | None:
@@ -184,11 +179,6 @@ def _lower_generator_assignment(node: Node, context: Context) -> str:
     return pad_to_source_lines(rebuilt, node, context)
 
 
-# Subtrees whose identifiers name something the file binds.  Reading a
-# whole node rather than its precise target over-collects — `G[i] = 1`
-# marks `G` and `i` bound, `import a.b` marks `a` and `b` — and that is
-# the safe direction: an over-collected name only keeps the ring rule
-# from firing, while a missed one would rewrite working code.
 _BINDING_FIELDS = {
     "assignment": ("left",),
     "augmented_assignment": ("left",),
@@ -218,8 +208,19 @@ def _identifiers(node: Node, into: set[str]) -> None:
         _identifiers(child, into)
 
 
-def _bound_names(node: Node) -> set[str]:
-    """Every name the file containing ``node`` binds, plus the builtins."""
+def _bound_names(node: Node) -> set[str] | None:
+    """File-wide binding candidates plus builtins, or unknown for a star import.
+
+    Whole binding subtrees are scanned conservatively: for example,
+    G[i] = 1 marks G and i bound, and import a.b marks a and b bound.
+    Over-collection merely suppresses an implicit ring rewrite; missing
+    a binding can change the meaning of valid code.
+
+    A wildcard import can bind arbitrary names at execution time.  The
+    source-only compiler cannot establish their absence without a runtime
+    binding contract, so no implicit generator declaration is safe in a
+    file containing one.
+    """
     root = node
     while root.parent is not None:
         root = root.parent
@@ -227,6 +228,8 @@ def _bound_names(node: Node) -> set[str]:
     stack = [root]
     while stack:
         current = stack.pop()
+        if current.type == "wildcard_import":
+            return None
         if current.type in _BINDING_FIELDS:
             for field in _BINDING_FIELDS[current.type]:
                 for target in current.children_by_field_name(field):
@@ -247,9 +250,11 @@ def _lower_assignment(node: Node, context: Context) -> str | None:
 
     Unboundness is what separates a ring from a subscript: ``G[i, j]``
     and ``dict[str, Any]`` are the same shape, and both name things the
-    file binds — loop targets, imports, builtins.  A name bound nowhere
-    can only be a ``NameError`` today, so no working code changes
-    meaning.  The limit is that the file is all the compiler sees: in a
+    file binds — loop targets, imports, builtins.  A wildcard import
+    makes the set of possible bindings unknown: decline the implicit
+    rewrite throughout such a file rather than inspect or execute the
+    imported module. Explicit generator declarations remain available.
+    The limit is that the file is all the compiler sees: in a
     notebook, names bound in an earlier cell look unbound here, and
     ``M = G[i, j]`` in a fresh cell would become a ring.  Declare the
     generators with ``R.<i,j> = ...`` in that situation, or index with an
@@ -263,7 +268,7 @@ def _lower_assignment(node: Node, context: Context) -> str | None:
     if generators is None:
         return None
     bound = _bound_names(node)
-    if any(generator in bound for generator in generators):
+    if bound is None or any(generator in bound for generator in generators):
         return None
     value = right.child_by_field_name("value")
     assert value is not None
@@ -281,5 +286,4 @@ EXTENSION: dict[str, LoweringRule] = {
     "assignment": _lower_assignment,
 }
 
-# Names the extension's lowerings emit into generated Python.
 RUNTIME_NAMES: tuple[str, ...] = ("Set", "ImageSet", "ConditionSet")
